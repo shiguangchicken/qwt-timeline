@@ -9,17 +9,10 @@
 #include <QScrollBar>
 #include <QTreeView>
 #include <qwt_plot.h>
-#include <qwt_plot_canvas.h>
+#include <qwt_plot_opengl_canvas.h>
 #include <qwt_plot_grid.h>
 #include <qwt_plot_item.h>
 #include <qwt_scale_map.h>
-
-#if __has_include(<qwt_plot_opengl_canvas.h>)
-#include <qwt_plot_opengl_canvas.h>
-#define TIMELINE_HAS_QWT_OPENGL_CANVAS 1
-#else
-#define TIMELINE_HAS_QWT_OPENGL_CANVAS 0
-#endif
 
 #include <algorithm>
 #include <functional>
@@ -131,14 +124,8 @@ TimelineWidget::TimelineWidget(QWidget* parent)
 
     plot_->setAutoReplot(false);
     plot_->setCanvasBackground(QColor::fromRgba(timeline_color::DEEP_GRAY));
-
-#if TIMELINE_HAS_QWT_OPENGL_CANVAS
     auto* glCanvas = new QwtPlotOpenGLCanvas();
     plot_->setCanvas(glCanvas);
-#else
-    auto* canvas = new QwtPlotCanvas();
-    plot_->setCanvas(canvas);
-#endif
 
     auto* grid = new QwtPlotGrid();
     grid->setMajorPen(QPen(QColor::fromRgba(timeline_color::ROW_LINE), 1, Qt::DotLine));

@@ -306,3 +306,8 @@ use add_subdirectory() on the main CMakeLists.txt
 
 1. add qwt submodule in directory timeline/qwt,  qwt git url: git@github.com:opencor/qwt.git
 2. create a cmake build command to build qwt submodule, qwt should configure by qmake, qmake path: /home/meng/Qt/6.9.3/gcc_64/bin/qmake
+
+
+# use timeline widget use opengl
+1. qwt submodule confiure and build with QwtOpenGL
+2. use QwtPlotOpenGLCanvas in TimelineWidget to use hardware accelerate
