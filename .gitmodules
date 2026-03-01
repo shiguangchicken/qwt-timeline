@@ -1,0 +1,3 @@
+[submodule "timeline/qwt"]
+	path = timeline/qwt
+	url = git@github.com:opencor/qwt.git
