@@ -12,6 +12,7 @@
 #include <functional>
 #include <memory>
 #include <random>
+#include <string>
 
 namespace {
 
@@ -26,16 +27,16 @@ void addRandomEvents(TimelineNode* node, std::mt19937& rng)
     };
     static constexpr std::array<uint32_t, 6> kColors = {
         timeline_color::DEFAULT,
-        timeline_color::HIGHLIGHT,
         timeline_color::GRAY,
         timeline_color::EVENT_EDGE_LINE,
         0xff86d8b2,
         0xffb5a3ff,
+        0xff4d76ff,
     };
 
-    std::uniform_int_distribution<int> countDist(10, 20);
-    std::uniform_int_distribution<int> gapDist(5, 60);
-    std::uniform_int_distribution<int> durationDist(10, 200);
+    std::uniform_int_distribution<int> countDist(35, 65);
+    std::uniform_int_distribution<int> gapDist(2, 40);
+    std::uniform_int_distribution<int> durationDist(8, 260);
     std::uniform_int_distribution<int> nameDist(0, static_cast<int>(kEventNames.size() - 1));
     std::uniform_int_distribution<int> colorDist(0, static_cast<int>(kColors.size() - 1));
 
@@ -59,12 +60,14 @@ std::unique_ptr<TimelineNode> createDemoTree(uint32_t seedShift)
     auto root = std::make_unique<TimelineNode>("Root", TimelineNode::TIMELINE_AREA);
 
     auto* cpu = new TimelineNode("CPU");
-    cpu->addChild(new TimelineNode("Core0"));
-    cpu->addChild(new TimelineNode("Core1"));
+    for (int i = 0; i <= 10; ++i) {
+        cpu->addChild(new TimelineNode("Core" + std::to_string(i)));
+    }
 
     auto* gpu = new TimelineNode("GPU");
-    gpu->addChild(new TimelineNode("Stream0"));
-    gpu->addChild(new TimelineNode("Stream1"));
+    for (int i = 0; i <= 20; ++i) {
+        gpu->addChild(new TimelineNode("Stream" + std::to_string(i)));
+    }
 
     root->addChild(cpu);
     root->addChild(gpu);

@@ -21,6 +21,7 @@ private:
     void syncVerticalScrollFromTree();
     void syncTreeFromVerticalScroll(int value);
     void configureHorizontalRange();
+    void updateHorizontalScrollBarFromRange(uint64_t start, uint64_t end);
 
 private:
     QTreeView* node_view_ = nullptr;

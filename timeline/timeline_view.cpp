@@ -1,9 +1,47 @@
 #include "timeline_view.h"
 
+#include "theme.h"
+
 #include <QGridLayout>
 #include <QHeaderView>
+#include <QPainter>
 #include <QScrollBar>
+#include <QStyledItemDelegate>
 #include <QTreeView>
+
+#include <algorithm>
+
+namespace {
+
+constexpr int kNodeRowHeight = 60;
+
+class TimelineNodeItemDelegate : public QStyledItemDelegate {
+public:
+    explicit TimelineNodeItemDelegate(QObject* parent = nullptr)
+        : QStyledItemDelegate(parent)
+    {
+    }
+
+    QSize sizeHint(const QStyleOptionViewItem& option, const QModelIndex& index) const override
+    {
+        QSize size = QStyledItemDelegate::sizeHint(option, index);
+        size.setHeight(kNodeRowHeight);
+        return size;
+    }
+
+    void paint(QPainter* painter, const QStyleOptionViewItem& option, const QModelIndex& index) const override
+    {
+        QStyledItemDelegate::paint(painter, option, index);
+
+        painter->save();
+        painter->setBrush(Qt::NoBrush);
+        painter->setPen(QPen(QColor::fromRgba(timeline_color::ROW_LINE), 1));
+        painter->drawRect(option.rect.adjusted(0, 0, -1, -1));
+        painter->restore();
+    }
+};
+
+} // namespace
 
 TimelineView::TimelineView(QWidget* parent)
     : QWidget(parent)
@@ -30,10 +68,12 @@ TimelineView::TimelineView(QWidget* parent)
     node_view_->setModel(node_model_);
     node_view_->setUniformRowHeights(true);
     node_view_->setAlternatingRowColors(false);
-    node_view_->header()->setStretchLastSection(true);
+    node_view_->setItemDelegate(new TimelineNodeItemDelegate(node_view_));
+    node_view_->header()->hide();
     node_view_->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
 
     timeline_widget_->init(node_model_, node_view_);
+    timeline_widget_->setRowHeight(kNodeRowHeight);
 
     connect(vertical_scroll_bar_, &QScrollBar::valueChanged, this, &TimelineView::syncTreeFromVerticalScroll);
     connect(node_view_->verticalScrollBar(), &QScrollBar::valueChanged, this, [this](int) {
@@ -48,6 +88,10 @@ TimelineView::TimelineView(QWidget* parent)
         const uint64_t start = static_cast<uint64_t>(value);
         const uint64_t end = start + windowSize_;
         timeline_widget_->setTimeRange(start, end);
+    });
+
+    connect(timeline_widget_, &TimelineWidget::timeRangeChanged, this, [this](uint64_t start, uint64_t end) {
+        updateHorizontalScrollBarFromRange(start, end);
     });
 
     connect(node_view_, &QTreeView::expanded, this, [this](const QModelIndex&) {
@@ -107,21 +151,50 @@ void TimelineView::syncTreeFromVerticalScroll(int value)
 
 void TimelineView::configureHorizontalRange()
 {
+    timeline_widget_->setFullRange(fullMin_, std::max(fullMax_, fullMin_ + 1));
+
     if (fullMax_ <= fullMin_) {
-        horizontal_scroll_bar_->setRange(0, 0);
+        windowSize_ = 1;
+        updateHorizontalScrollBarFromRange(0, windowSize_);
         timeline_widget_->setTimeRange(0, windowSize_);
         return;
     }
 
     const uint64_t total = fullMax_ - fullMin_;
-    const uint64_t desiredWindow = std::max<uint64_t>(windowSize_, 1);
-    windowSize_ = std::min<uint64_t>(desiredWindow, total);
+    windowSize_ = total;
 
+    updateHorizontalScrollBarFromRange(fullMin_, fullMin_ + windowSize_);
+
+    timeline_widget_->setTimeRange(fullMin_, fullMin_ + windowSize_);
+}
+
+void TimelineView::updateHorizontalScrollBarFromRange(uint64_t start, uint64_t end)
+{
+    uint64_t safeEnd = end;
+    if (safeEnd <= start) {
+        safeEnd = start + 1;
+    }
+
+    if (fullMax_ <= fullMin_) {
+        windowSize_ = 1;
+        horizontal_scroll_bar_->blockSignals(true);
+        horizontal_scroll_bar_->setRange(0, 0);
+        horizontal_scroll_bar_->setPageStep(1);
+        horizontal_scroll_bar_->setSingleStep(1);
+        horizontal_scroll_bar_->setValue(0);
+        horizontal_scroll_bar_->blockSignals(false);
+        return;
+    }
+
+    const uint64_t total = fullMax_ - fullMin_;
+    windowSize_ = std::clamp<uint64_t>(safeEnd - start, 1, total);
     const uint64_t maxStart = (total > windowSize_) ? (fullMax_ - windowSize_) : fullMin_;
+    const uint64_t clampedStart = std::clamp<uint64_t>(start, fullMin_, maxStart);
+
+    horizontal_scroll_bar_->blockSignals(true);
     horizontal_scroll_bar_->setRange(static_cast<int>(fullMin_), static_cast<int>(maxStart));
     horizontal_scroll_bar_->setPageStep(static_cast<int>(windowSize_));
     horizontal_scroll_bar_->setSingleStep(std::max(1, static_cast<int>(windowSize_ / 20)));
-    horizontal_scroll_bar_->setValue(static_cast<int>(fullMin_));
-
-    timeline_widget_->setTimeRange(fullMin_, fullMin_ + windowSize_);
+    horizontal_scroll_bar_->setValue(static_cast<int>(clampedStart));
+    horizontal_scroll_bar_->blockSignals(false);
 }

@@ -4,7 +4,7 @@
 
 namespace timeline_color {
 constexpr uint32_t DEFAULT = 0xff9e9e9e;
-constexpr uint32_t HIGHLIGHT = 0xffFBDEBB;
+constexpr uint32_t HIGHLIGHT = 0xffBBDEFB;
 constexpr uint32_t GRAY = 0xff645A45;
 constexpr uint32_t DEEP_GRAY = 0xffE0E0E0;
 constexpr uint32_t ROW_LINE = 0xffC5BEB0;
