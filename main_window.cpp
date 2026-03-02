@@ -74,7 +74,7 @@ std::unique_ptr<TimelineNode> createDemoTree(uint32_t seedShift)
 
     std::mt19937 rng(1337u + seedShift);
     root->foreachNode([&](TimelineNode* node) {
-        if (node != root.get()) {
+        if (node != root.get() && node != cpu && node != gpu) {
             addRandomEvents(node, rng);
         }
     });

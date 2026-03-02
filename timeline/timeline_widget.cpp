@@ -1,3 +1,5 @@
+#include <qwt_scale_map.h>
+#include <qwt_text.h>
 #include "timeline_widget.h"
 
 #include "theme.h"
@@ -17,12 +19,52 @@
 #include <qwt_plot_opengl_canvas.h>
 #include <qwt_plot_grid.h>
 #include <qwt_plot_item.h>
+#include <qwt_scale_draw.h>
+#include <qwt_text.h>
 #include <qwt_scale_map.h>
+
+#include <QToolTip>
 
 #include <algorithm>
 #include <cstdlib>
 #include <functional>
 #include <vector>
+
+class TimelineScaleDraw : public QwtScaleDraw {
+public: virtual double extent(const QFont& f) const override { return QwtScaleDraw::extent(f); }
+virtual void drawTick(QPainter* p, double v, double l) const override { QwtScaleDraw::drawTick(p, v, l); }
+virtual void drawBackbone(QPainter* p) const override { QwtScaleDraw::drawBackbone(p); }
+virtual void drawLabel(QPainter *p, double v) const override { QwtScaleDraw::drawLabel(p, v); }
+
+public:
+    TimelineScaleDraw() = default;
+
+    QwtText label(double value) const override
+    {
+        uint64_t factor = 1;
+        const char* unit = getTimeUnit(static_cast<int64_t>(value), factor);
+        QString labelStr = QString::number(value / static_cast<double>(factor));
+        return QwtText(labelStr + " " + unit);
+    }
+
+    static const char* getTimeUnit(int64_t time, uint64_t& factor)
+    {
+        uint64_t value = std::abs(time);
+        if (value < 1000) {
+            factor = 1;
+            return "ns";
+        } else if (value < 1000 * 1000) {
+            factor = 1000;
+            return "us";
+        } else if (value < 1000 * 1000 * 1000) {
+            factor = 1000 * 1000;
+            return "ms";
+        } else {
+            factor = 1000 * 1000 * 1000;
+            return "s";
+        }
+    }
+};
 
 class TimelineWidget::TimelinePlotItem : public QwtPlotItem {
 public:
@@ -155,6 +197,27 @@ public:
             painter->drawRects(borderRects.constData(), borderRects.size());
         }
 
+        // Draw event names
+        painter->setPen(Qt::white);
+        for (const auto& item : visibleRows) {
+            const QRect rowRect = owner_->tree_->visualRect(item.index);
+            if (!rowRect.isValid()) continue;
+            const int barTop = rowRect.top() + 1;
+            const int barBottom = rowRect.bottom();
+            for (const TimelineEvent* event : item.node->events()) {
+                if (event->end < owner_->visibleStart_ || event->start > owner_->visibleEnd_) continue;
+                const uint64_t clippedStart = std::max(event->start, owner_->visibleStart_);
+                const uint64_t clippedEnd = std::min(event->end, owner_->visibleEnd_);
+                const double left = xMap.transform(static_cast<double>(clippedStart));
+                const double right = xMap.transform(static_cast<double>(clippedEnd));
+                QRectF rect(QPointF(left, static_cast<double>(barTop)), QPointF(right, static_cast<double>(barBottom)));
+                if (rect.width() > 10) {
+                    QString name = QString::fromUtf8(event->name.data(), static_cast<int>(event->name.size()));
+                    painter->drawText(rect, Qt::AlignCenter, painter->fontMetrics().elidedText(name, Qt::ElideRight, static_cast<int>(rect.width())));
+                }
+            }
+        }
+
         if (!selectedBoundaryLines.isEmpty()) {
             painter->setPen(QPen(QColor::fromRgba(timeline_color::HIGHLIGHT), 1));
             painter->drawLines(selectedBoundaryLines.constData(), selectedBoundaryLines.size());
@@ -192,7 +255,10 @@ TimelineWidget::TimelineWidget(QWidget* parent)
 
     auto* grid = new QwtPlotGrid();
     grid->setMajorPen(QPen(QColor::fromRgba(timeline_color::ROW_LINE), 1, Qt::DotLine));
+    grid->enableY(false);
     grid->attach(plot_);
+
+    plot_->setAxisScaleDraw(QwtPlot::xBottom, new TimelineScaleDraw());
 
     plot_->setMouseTracking(true);
     plot_->canvas()->setMouseTracking(true);
@@ -436,6 +502,47 @@ void TimelineWidget::flushMouseTracker()
     mouseTrackerTime_ = std::clamp(time, static_cast<double>(visibleStart_), static_cast<double>(visibleEnd_));
     hasPendingMousePos_ = false;
     showMouseTracker_ = true;
+
+    // Tooltip logic
+    if (model_ != nullptr && tree_ != nullptr) {
+        bool found = false;
+        std::function<void(const QModelIndex&)> visitVisible = [&](const QModelIndex& parentIndex) {
+            if (found) return;
+            const int rows = model_->rowCount(parentIndex);
+            for (int i = 0; i < rows; ++i) {
+                if (found) return;
+                const QModelIndex idx = model_->index(i, 0, parentIndex);
+                TimelineNode* node = model_->nodeFromIndex(idx);
+                if (node == nullptr) continue;
+                const QRect rowRect = tree_->visualRect(idx);
+                if (!rowRect.isValid()) continue;
+                const int barTop = rowRect.top() + 1;
+                const int barBottom = rowRect.bottom();
+                if (pendingMousePos_.y() >= barTop && pendingMousePos_.y() <= barBottom) {
+                    for (const TimelineEvent* event : node->events()) {
+                        if (event->end < visibleStart_ || event->start > visibleEnd_) continue;
+                        const uint64_t clippedStart = std::max(event->start, visibleStart_);
+                        const uint64_t clippedEnd = std::min(event->end, visibleEnd_);
+                        const double left = plot_->transform(QwtPlot::xBottom, static_cast<double>(clippedStart));
+                        const double right = plot_->transform(QwtPlot::xBottom, static_cast<double>(clippedEnd));
+                        if (pendingMousePos_.x() >= left && pendingMousePos_.x() <= right) {
+                            QString tip = QString("Name: %1\nStart: %2 ns\nEnd: %3 ns")
+                                .arg(QString::fromUtf8(event->name.data(), static_cast<int>(event->name.size())))
+                                .arg(event->start)
+                                .arg(event->end);
+                            QToolTip::showText(plot_->canvas()->mapToGlobal(pendingMousePos_), tip, plot_->canvas());
+                            found = true;
+                            break;
+                        }
+                    }
+                }
+                if (!found && tree_->isExpanded(idx)) visitVisible(idx);
+            }
+        };
+        visitVisible(QModelIndex());
+        if (!found) QToolTip::hideText();
+    }
+
     draw();
 }
 

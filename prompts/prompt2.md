@@ -28,3 +28,32 @@
 1. only the wheel event control vertical scrollbar, the same action as the treeview vertical scroll bar. 
 2. shift + wheel event ctrol the horizental scroll bar.
 3. ctrl + wheel event still keep zoom in , zoom out.
+
+
+# TimelineWidget
+1. no plot grid in y axis
+2. x aixs add unit like this
+    const char* TimelineWidget::getTimeUint(int64_t time, uint64_t& factor)
+{
+    uint64_t value = abs(time);
+    if (value < 1000) {
+        factor = 1;
+        return "ns";
+    } else if (value < 1000 * 1000) {
+        factor = 1000;
+        return "us";
+    } else if (value < 1000 * 1000 * 1000) {
+        factor = 1000 * 1000;
+        return "ms";
+    } else {
+        factor = 1000 * 1000 * 1000;
+        return "s";
+    }
+}
+
+3. mouse tracker show a text when hover on a event, text: event name, event start time, event end time
+
+4. event rect show the event name on center, and cut the string if the name is oversize the rect
+
+# main_window.cpp
+1. createDemoTree do not add events on the parent node like CPU and GPU

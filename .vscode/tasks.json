@@ -4,7 +4,7 @@
 		{
 			"label": "Configure and Build Qt Debug",
 			"type": "shell",
-			"command": "cmake -S /home/meng/Documents/projects/ai-timline -B /home/meng/Documents/projects/ai-timline/build/Desktop_Qt_6_9_3-Debug -DCMAKE_BUILD_TYPE:STRING=Debug -DCMAKE_GENERATOR:STRING=Ninja -DCMAKE_COLOR_DIAGNOSTICS:BOOL=ON -DCMAKE_PREFIX_PATH:PATH=/home/meng/Qt/6.9.3/gcc_64 && cmake --build ./build/Desktop_Qt_6_9_3-Debug/",
+			"command": "cmake -S . -B ./build/Desktop_Qt_6_9_3-Debug -DCMAKE_BUILD_TYPE:STRING=Debug -DCMAKE_GENERATOR:STRING=Ninja -DCMAKE_COLOR_DIAGNOSTICS:BOOL=ON -DCMAKE_PREFIX_PATH:PATH=/home/meng/Qt/6.9.3/gcc_64 && cmake --build ./build/Desktop_Qt_6_9_3-Debug/",
 			"isBackground": false,
 			"group": "build"
 		},
