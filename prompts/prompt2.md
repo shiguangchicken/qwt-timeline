@@ -63,3 +63,15 @@
 1. TimlineWidget : if timeline node type() is TIMELINE_COUNTER, set the maxCounterValue. then draw the timeline event rectangles height as the CounterTimelineEvent::value / maxCounterValue * nodeHeight.  the timeline event rectangles height maximum height is nodeHeight
 2. main_window.cpp, add a Memory parent node, 5 children, type is TIMELINE_COUNTER, add dummy data. 
 3. main_window.cpp the TIMELINE_COUNTER node do not set event name, and timeline_widget.cpp do not show event name if event name is empty
+
+# TimelineWidget
+1. the mouse traker line show the current time on the axis area, current time message format: 0.386 us, or 658 ns, or 69.68 ms
+2. build the project after change, build command in .vscode/tasks.json
+
+# TimelineWidget
+1. the current time shows blow the mouse traker, on the axis area ( area like TimelineScaleDraw label), current time message format: 0.386 us, or 658 ns, or 69.68 ms. update the current time when the mouse position changed.
+2. build the project after change, build command in .vscode/tasks.json
+
+give me a prompt
+
+2. painter->drawText in drawBackbone function, the text center x position shold the same with mouse x position. update the current time when the mouse position changed

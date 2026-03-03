@@ -21,6 +21,7 @@
 #include <qwt_plot_opengl_canvas.h>
 #include <qwt_scale_draw.h>
 #include <qwt_scale_map.h>
+#include <qwt_scale_widget.h>
 #include <qwt_text.h>
 #include <vector>
 
@@ -32,6 +33,31 @@ public:
     virtual void drawTick(QPainter* p, double v, double l) const override { QwtScaleDraw::drawTick(p, v, l); }
     virtual void drawBackbone(QPainter* p) const override { QwtScaleDraw::drawBackbone(p); }
     virtual void drawLabel(QPainter* p, double v) const override { QwtScaleDraw::drawLabel(p, v); }
+    void draw(QPainter* painter, const QPalette& palette) const override
+    {
+        QwtScaleDraw::draw(painter, palette);
+        if (!showMouseText_) {
+            return;
+        }
+
+        uint64_t factor = 1;
+        const char* unit = getTimeUnit(static_cast<int64_t>(mouseTime_), factor);
+        const QString text = QString::number(mouseTime_ / static_cast<double>(factor)) + " " + unit;
+
+        painter->save();
+        painter->setPen(QPen(QColor::fromRgba(timeline_color::CURRENT_TIME), 1));
+        const QPointF axisPos = QwtScaleDraw::pos();
+        const int baselineY = static_cast<int>(axisPos.y() + painter->fontMetrics().height() - 2);
+        painter->drawText(QPointF(mouseX_, baselineY), text);
+        painter->restore();
+    }
+
+    void setMouseTracker(bool showMouseText, double mouseTime, double mouseX)
+    {
+        showMouseText_ = showMouseText;
+        mouseTime_ = mouseTime;
+        mouseX_ = mouseX;
+    }
 
 public:
     TimelineScaleDraw() = default;
@@ -61,6 +87,11 @@ public:
             return "s";
         }
     }
+
+private:
+    bool showMouseText_ = false;
+    double mouseTime_ = 0.0;
+    double mouseX_ = 0.0;
 };
 
 class TimelineWidget::TimelinePlotItem : public QwtPlotItem {
@@ -393,6 +424,13 @@ void TimelineWidget::draw()
     const int plotHeight = std::max(visibleCount, 1) * rowHeight_;
     plot_->setAxisScale(QwtPlot::xBottom, static_cast<double>(visibleStart_), static_cast<double>(visibleEnd_));
     plot_->setAxisScale(QwtPlot::yLeft, static_cast<double>(plotHeight), 0.0);
+
+    if (auto* scaleDraw = dynamic_cast<TimelineScaleDraw*>(plot_->axisScaleDraw(QwtPlot::xBottom))) {
+        const double mouseX = plot_->transform(QwtPlot::xBottom, mouseTrackerTime_);
+        scaleDraw->setMouseTracker(showMouseTracker_, mouseTrackerTime_, mouseX);
+    }
+
+    plot_->axisWidget(QwtPlot::xBottom)->update();
     plot_->replot();
 }
 
