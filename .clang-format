@@ -1,0 +1,72 @@
+# 基于 Google 编码规范
+BasedOnStyle: Google
+
+# 基础配置
+Language: Cpp
+Standard: Latest
+AccessModifierOffset: -4 # public/private 标签向左缩进 4 格
+AlignAfterOpenBracket: Align # 开括号后换行时对齐内容
+AlignConsecutiveAssignments: false # 不连续对齐等号（避免大幅度跳跃）
+AlignConsecutiveDeclarations: false # 不连续对齐变量声明
+AlignOperands: true # 换行时对齐操作数
+AlignTrailingComments: true # 对齐行尾注释
+
+# 缩进与换行
+IndentWidth: 4 # 缩进宽度为 4
+ColumnLimit: 120 # 单行字符限制（建议 80-120 之间）
+TabWidth: 4
+UseTab: Never # 禁止使用 Tab，统一使用空格
+
+# 大括号换行策略
+BreakBeforeBraces: Custom
+BraceWrapping:
+  AfterCaseLabel: false
+  AfterClass: false
+  AfterControlStatement: Never
+  AfterEnum: false
+  AfterFunction: true
+  AfterNamespace: false
+  AfterStruct: false
+  AfterUnion: false
+  BeforeCatch: false
+  BeforeElse: false
+  IndentBraces: false
+  SplitEmptyFunction: true
+  SplitEmptyRecord: true
+
+# 括号与空格
+AllowAllParametersOfDeclarationOnNextLine: false # 允许函数参数在下一行排布
+AllowShortBlocksOnASingleLine: Never # 不允许单行写 if/while 体
+AllowShortFunctionsOnASingleLine: Inline # 只允许类内内联函数写在单行
+AllowShortIfStatementsOnASingleLine: false # 不允许单行 if
+AllowShortLoopsOnASingleLine: false # 不允许单行循环
+
+# 模板与容器
+AlwaysBreakTemplateDeclarations: Yes # 模板声明强制换行
+BinPackParameters: false # 参数不全部挤在一行
+PointerAlignment: Left # 指针符号靠左: int* p;
+
+# 头文件包含排序
+IncludeBlocks: Regroup
+IncludeCategories:
+  - Regex: '^<ext/.*\.h>'
+    Priority: 2
+  - Regex: '^<.*\.h>'
+    Priority: 1
+  - Regex: "^<.*"
+    Priority: 1
+  - Regex: ".*"
+    Priority: 3
+
+# 命名空间
+FixNamespaceComments: true # 自动在 namespace 结束的大括号后添加注释
+ShortNamespaceLines: 0
+
+# 现代 C++ 风格
+SpaceAfterCStyleCast: false # C 风格强转后不加空格
+SpaceBeforeRangeBasedForLoopColon: true # for(auto& x : xs) 冒号前加空格
+
+BreakConstructorInitializers: BeforeComma
+ConstructorInitializerAllOnOneLineOrOnePerLine: true
+ConstructorInitializerIndentWidth: 4
+BreakConstructorInitializersBeforeComma: true

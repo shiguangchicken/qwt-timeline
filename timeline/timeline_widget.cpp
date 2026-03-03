@@ -1,8 +1,4 @@
-#include <qwt_scale_map.h>
-#include <qwt_text.h>
 #include "timeline_widget.h"
-
-#include "theme.h"
 
 #include <QBoxLayout>
 #include <QColor>
@@ -12,29 +8,30 @@
 #include <QPainter>
 #include <QPen>
 #include <QScrollBar>
+#include <QToolTip>
 #include <QTreeView>
 #include <QVector>
 #include <QWheelEvent>
-#include <qwt_plot.h>
-#include <qwt_plot_opengl_canvas.h>
-#include <qwt_plot_grid.h>
-#include <qwt_plot_item.h>
-#include <qwt_scale_draw.h>
-#include <qwt_text.h>
-#include <qwt_scale_map.h>
-
-#include <QToolTip>
-
 #include <algorithm>
 #include <cstdlib>
 #include <functional>
+#include <qwt_plot.h>
+#include <qwt_plot_grid.h>
+#include <qwt_plot_item.h>
+#include <qwt_plot_opengl_canvas.h>
+#include <qwt_scale_draw.h>
+#include <qwt_scale_map.h>
+#include <qwt_text.h>
 #include <vector>
 
+#include "theme.h"
+
 class TimelineScaleDraw : public QwtScaleDraw {
-public: virtual double extent(const QFont& f) const override { return QwtScaleDraw::extent(f); }
-virtual void drawTick(QPainter* p, double v, double l) const override { QwtScaleDraw::drawTick(p, v, l); }
-virtual void drawBackbone(QPainter* p) const override { QwtScaleDraw::drawBackbone(p); }
-virtual void drawLabel(QPainter *p, double v) const override { QwtScaleDraw::drawLabel(p, v); }
+public:
+    virtual double extent(const QFont& f) const override { return QwtScaleDraw::extent(f); }
+    virtual void drawTick(QPainter* p, double v, double l) const override { QwtScaleDraw::drawTick(p, v, l); }
+    virtual void drawBackbone(QPainter* p) const override { QwtScaleDraw::drawBackbone(p); }
+    virtual void drawLabel(QPainter* p, double v) const override { QwtScaleDraw::drawLabel(p, v); }
 
 public:
     TimelineScaleDraw() = default;
@@ -68,11 +65,7 @@ public:
 
 class TimelineWidget::TimelinePlotItem : public QwtPlotItem {
 public:
-    explicit TimelinePlotItem(TimelineWidget* owner)
-        : owner_(owner)
-    {
-        setZ(20.0);
-    }
+    explicit TimelinePlotItem(TimelineWidget* owner) : owner_(owner) { setZ(20.0); }
 
     void draw(QPainter* painter,
               const QwtScaleMap& xMap,
@@ -98,7 +91,7 @@ public:
                 const QModelIndex idx = owner_->model_->index(r, 0, parentIndex);
                 auto* node = owner_->model_->nodeFromIndex(idx);
                 if (node != nullptr) {
-                    visibleRows.push_back({ node, idx });
+                    visibleRows.push_back({node, idx});
                     ++rowCounter;
                     if (owner_->tree_->isExpanded(idx)) {
                         collect(idx, rowCounter);
@@ -109,6 +102,21 @@ public:
 
         int rowCounter = 0;
         collect(QModelIndex(), rowCounter);
+
+        for (const auto& item : visibleRows) {
+            if (item.node->type() == TimelineNode::TIMELINE_COUNTER) {
+                double maxValue = 0.0;
+                for (const TimelineEvent* event : item.node->events()) {
+                    if (const CounterTimelineEvent* counterEvent = dynamic_cast<const CounterTimelineEvent*>(event)) {
+                        maxValue = std::max(maxValue, counterEvent->value);
+                    }
+                }
+                if (maxValue <= 0.0) {
+                    maxValue = 1.0;
+                }
+                item.node->setMaxCounterValue(maxValue);
+            }
+        }
 
         painter->save();
         painter->setRenderHint(QPainter::Antialiasing, false);
@@ -152,23 +160,37 @@ public:
                 const uint64_t clippedEnd = std::min(event->end, owner_->visibleEnd_);
                 const double left = xMap.transform(static_cast<double>(clippedStart));
                 const double right = xMap.transform(static_cast<double>(clippedEnd));
-                const double top = static_cast<double>(barTop);
-                const double bottom = static_cast<double>(barBottom);
+                const double rowTop = static_cast<double>(barTop);
+                const double rowBottom = static_cast<double>(barBottom);
+                double rectTop = rowTop;
+                double rectBottom = rowBottom;
+                if (item.node->type() == TimelineNode::TIMELINE_COUNTER) {
+                    const double nodeHeight = std::max(0.0, rowBottom - rowTop);
+                    const double maxValue = item.node->maxCounterValue();
+                    if (nodeHeight > 0.0 && maxValue > 0.0) {
+                        if (const CounterTimelineEvent* counterEvent =
+                                dynamic_cast<const CounterTimelineEvent*>(event)) {
+                            const double heightRatio = std::clamp(counterEvent->value / maxValue, 0.0, 1.0);
+                            const double height = std::clamp(heightRatio * nodeHeight, 0.0, nodeHeight);
+                            rectBottom = rowBottom;
+                            rectTop = rowBottom - height;
+                        }
+                    }
+                }
 
-                QRectF rect(QPointF(left, top), QPointF(right, bottom));
+                QRectF rect(QPointF(left, rectTop), QPointF(right, rectBottom));
                 rect = rect.normalized();
 
-                const bool isSelected = owner_->hasSelectedEvent_
-                    && owner_->selectedRowIndex_.isValid()
-                    && owner_->selectedRowIndex_ == item.index
-                    && owner_->selectedEvent_ == event;
+                const bool isSelected = owner_->hasSelectedEvent_ && owner_->selectedRowIndex_.isValid() &&
+                                        owner_->selectedRowIndex_ == item.index && owner_->selectedEvent_ == event;
 
                 if (isSelected) {
                     selectedFillRects.push_back(rect);
                     const double yTop = canvasRect.top();
                     const double yBottom = canvasRect.bottom();
                     selectedBoundaryLines.push_back(QLineF(QPointF(rect.left(), yTop), QPointF(rect.left(), yBottom)));
-                    selectedBoundaryLines.push_back(QLineF(QPointF(rect.right(), yTop), QPointF(rect.right(), yBottom)));
+                    selectedBoundaryLines.push_back(
+                        QLineF(QPointF(rect.right(), yTop), QPointF(rect.right(), yBottom)));
                 } else {
                     fillRectsByColor[event->color].push_back(rect);
                 }
@@ -201,11 +223,13 @@ public:
         painter->setPen(Qt::white);
         for (const auto& item : visibleRows) {
             const QRect rowRect = owner_->tree_->visualRect(item.index);
-            if (!rowRect.isValid()) continue;
+            if (!rowRect.isValid())
+                continue;
             const int barTop = rowRect.top() + 1;
             const int barBottom = rowRect.bottom();
             for (const TimelineEvent* event : item.node->events()) {
-                if (event->end < owner_->visibleStart_ || event->start > owner_->visibleEnd_) continue;
+                if (event->end < owner_->visibleStart_ || event->start > owner_->visibleEnd_)
+                    continue;
                 const uint64_t clippedStart = std::max(event->start, owner_->visibleStart_);
                 const uint64_t clippedEnd = std::min(event->end, owner_->visibleEnd_);
                 const double left = xMap.transform(static_cast<double>(clippedStart));
@@ -213,7 +237,12 @@ public:
                 QRectF rect(QPointF(left, static_cast<double>(barTop)), QPointF(right, static_cast<double>(barBottom)));
                 if (rect.width() > 10) {
                     QString name = QString::fromUtf8(event->name.data(), static_cast<int>(event->name.size()));
-                    painter->drawText(rect, Qt::AlignCenter, painter->fontMetrics().elidedText(name, Qt::ElideRight, static_cast<int>(rect.width())));
+                    if (name.isEmpty()) {
+                        continue;
+                    }
+                    painter->drawText(
+                        rect, Qt::AlignCenter,
+                        painter->fontMetrics().elidedText(name, Qt::ElideRight, static_cast<int>(rect.width())));
                 }
             }
         }
@@ -240,9 +269,7 @@ private:
 };
 
 TimelineWidget::TimelineWidget(QWidget* parent)
-    : QWidget(parent)
-    , plot_(new QwtPlot(this))
-    , plotItem_(new TimelinePlotItem(this))
+    : QWidget(parent), plot_(new QwtPlot(this)), plotItem_(new TimelinePlotItem(this))
 {
     auto* layout = new QVBoxLayout(this);
     layout->setContentsMargins(0, 0, 0, 0);
@@ -470,7 +497,8 @@ bool TimelineWidget::handleWheelEvent(QWheelEvent* wheelEvent)
     const uint64_t panStep = std::max<uint64_t>(1, span / 10);
     const int deltaNotches = std::max(1, std::abs(delta) / 120);
     const int direction = (delta > 0) ? -1 : 1;
-    const int64_t offset = static_cast<int64_t>(direction) * static_cast<int64_t>(deltaNotches) * static_cast<int64_t>(panStep);
+    const int64_t offset =
+        static_cast<int64_t>(direction) * static_cast<int64_t>(deltaNotches) * static_cast<int64_t>(panStep);
 
     const int64_t minStart = static_cast<int64_t>(fullStart_);
     const int64_t maxStart = static_cast<int64_t>(fullEnd_ - span);
@@ -507,40 +535,48 @@ void TimelineWidget::flushMouseTracker()
     if (model_ != nullptr && tree_ != nullptr) {
         bool found = false;
         std::function<void(const QModelIndex&)> visitVisible = [&](const QModelIndex& parentIndex) {
-            if (found) return;
+            if (found)
+                return;
             const int rows = model_->rowCount(parentIndex);
             for (int i = 0; i < rows; ++i) {
-                if (found) return;
+                if (found)
+                    return;
                 const QModelIndex idx = model_->index(i, 0, parentIndex);
                 TimelineNode* node = model_->nodeFromIndex(idx);
-                if (node == nullptr) continue;
+                if (node == nullptr)
+                    continue;
                 const QRect rowRect = tree_->visualRect(idx);
-                if (!rowRect.isValid()) continue;
+                if (!rowRect.isValid())
+                    continue;
                 const int barTop = rowRect.top() + 1;
                 const int barBottom = rowRect.bottom();
                 if (pendingMousePos_.y() >= barTop && pendingMousePos_.y() <= barBottom) {
                     for (const TimelineEvent* event : node->events()) {
-                        if (event->end < visibleStart_ || event->start > visibleEnd_) continue;
+                        if (event->end < visibleStart_ || event->start > visibleEnd_)
+                            continue;
                         const uint64_t clippedStart = std::max(event->start, visibleStart_);
                         const uint64_t clippedEnd = std::min(event->end, visibleEnd_);
                         const double left = plot_->transform(QwtPlot::xBottom, static_cast<double>(clippedStart));
                         const double right = plot_->transform(QwtPlot::xBottom, static_cast<double>(clippedEnd));
                         if (pendingMousePos_.x() >= left && pendingMousePos_.x() <= right) {
-                            QString tip = QString("Name: %1\nStart: %2 ns\nEnd: %3 ns")
-                                .arg(QString::fromUtf8(event->name.data(), static_cast<int>(event->name.size())))
-                                .arg(event->start)
-                                .arg(event->end);
+                            QString tip =
+                                QString("Name: %1\nStart: %2 ns\nEnd: %3 ns")
+                                    .arg(QString::fromUtf8(event->name.data(), static_cast<int>(event->name.size())))
+                                    .arg(event->start)
+                                    .arg(event->end);
                             QToolTip::showText(plot_->canvas()->mapToGlobal(pendingMousePos_), tip, plot_->canvas());
                             found = true;
                             break;
                         }
                     }
                 }
-                if (!found && tree_->isExpanded(idx)) visitVisible(idx);
+                if (!found && tree_->isExpanded(idx))
+                    visitVisible(idx);
             }
         };
         visitVisible(QModelIndex());
-        if (!found) QToolTip::hideText();
+        if (!found)
+            QToolTip::hideText();
     }
 
     draw();
@@ -578,8 +614,7 @@ void TimelineWidget::applyZoomAround(double anchorTime, double zoomFactor)
         newStart = newEnd - targetSpan;
     }
 
-    setTimeRange(static_cast<uint64_t>(std::max(0.0, newStart)),
-                 static_cast<uint64_t>(std::max(1.0, newEnd)));
+    setTimeRange(static_cast<uint64_t>(std::max(0.0, newStart)), static_cast<uint64_t>(std::max(1.0, newEnd)));
 }
 
 void TimelineWidget::updateSelectionFromPosition(const QPoint& pos)

@@ -1,18 +1,17 @@
 #include "main_window.h"
-#include "./ui_mainwindow.h"
-
-#include "timeline/theme.h"
-#include "timeline/timeline_event.h"
-#include "timeline/timeline_node.h"
-#include "timeline/timeline_view.h"
 
 #include <QVBoxLayout>
-
 #include <array>
 #include <functional>
 #include <memory>
 #include <random>
 #include <string>
+
+#include "./ui_mainwindow.h"
+#include "timeline/theme.h"
+#include "timeline/timeline_event.h"
+#include "timeline/timeline_node.h"
+#include "timeline/timeline_view.h"
 
 namespace {
 
@@ -22,9 +21,8 @@ void addRandomEvents(TimelineNode* node, std::mt19937& rng)
         return;
     }
 
-    static constexpr std::array<std::string_view, 8> kEventNames = {
-        "Decode", "Render", "Dispatch", "Wait", "Compute", "IO", "Kernel", "Sync"
-    };
+    static constexpr std::array<std::string_view, 8> kEventNames = {"Decode",  "Render", "Dispatch", "Wait",
+                                                                    "Compute", "IO",     "Kernel",   "Sync"};
     static constexpr std::array<uint32_t, 6> kColors = {
         timeline_color::DEFAULT,
         timeline_color::GRAY,
@@ -55,6 +53,39 @@ void addRandomEvents(TimelineNode* node, std::mt19937& rng)
     }
 }
 
+void addCounterEvents(TimelineNode* node, std::mt19937& rng)
+{
+    if (node == nullptr) {
+        return;
+    }
+
+    static constexpr std::array<uint32_t, 4> kCounterColors = {
+        timeline_color::DEFAULT,
+        0xff86d8b2,
+        0xffb5a3ff,
+        0xff4d76ff,
+    };
+
+    std::uniform_int_distribution<int> gapDist(5, 45);
+    std::uniform_int_distribution<int> durationDist(10, 120);
+    std::uniform_real_distribution<double> valueDist(15.0, 220.0);
+    std::uniform_int_distribution<int> colorDist(0, static_cast<int>(kCounterColors.size() - 1));
+
+    const int eventCount = 40;
+    uint64_t cursor = 0;
+    for (int i = 0; i < eventCount; ++i) {
+        cursor += static_cast<uint64_t>(gapDist(rng));
+        const uint64_t duration = static_cast<uint64_t>(durationDist(rng));
+        auto* event = new CounterTimelineEvent();
+        event->start = cursor;
+        event->end = cursor + duration;
+        event->color = kCounterColors[colorDist(rng)];
+        event->value = valueDist(rng);
+        node->addEvent(event);
+        cursor = event->end;
+    }
+}
+
 std::unique_ptr<TimelineNode> createDemoTree(uint32_t seedShift)
 {
     auto root = std::make_unique<TimelineNode>("Root", TimelineNode::TIMELINE_AREA);
@@ -72,22 +103,33 @@ std::unique_ptr<TimelineNode> createDemoTree(uint32_t seedShift)
     root->addChild(cpu);
     root->addChild(gpu);
 
+    auto* memory = new TimelineNode("Memory");
+    for (int i = 0; i < 5; ++i) {
+        memory->addChild(new TimelineNode("Channel" + std::to_string(i), TimelineNode::TIMELINE_COUNTER));
+    }
+    root->addChild(memory);
+
     std::mt19937 rng(1337u + seedShift);
+    for (int i = 0; i < memory->childCount(); ++i) {
+        addCounterEvents(memory->childAt(i), rng);
+    }
     root->foreachNode([&](TimelineNode* node) {
-        if (node != root.get() && node != cpu && node != gpu) {
-            addRandomEvents(node, rng);
+        if (node == root.get() || node == cpu || node == gpu || node == memory) {
+            return;
         }
+        if (node->type() == TimelineNode::TIMELINE_COUNTER) {
+            return;
+        }
+        addRandomEvents(node, rng);
     });
 
     root->sortEvents();
     return root;
 }
 
-} // namespace
+}  // namespace
 
-MainWindow::MainWindow(QWidget *parent)
-    : QMainWindow(parent)
-    , ui(new Ui::MainWindow)
+MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent), ui(new Ui::MainWindow)
 {
     ui->setupUi(this);
 

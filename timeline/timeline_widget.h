@@ -1,11 +1,11 @@
 #pragma once
 
-#include "timeline_node_model.h"
-
 #include <QPersistentModelIndex>
 #include <QPoint>
 #include <QTimer>
 #include <QWidget>
+
+#include "timeline_node_model.h"
 
 class QTreeView;
 class QwtPlot;

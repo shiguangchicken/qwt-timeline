@@ -57,3 +57,9 @@
 
 # main_window.cpp
 1. createDemoTree do not add events on the parent node like CPU and GPU
+
+
+# draw counter timeline
+1. TimlineWidget : if timeline node type() is TIMELINE_COUNTER, set the maxCounterValue. then draw the timeline event rectangles height as the CounterTimelineEvent::value / maxCounterValue * nodeHeight.  the timeline event rectangles height maximum height is nodeHeight
+2. main_window.cpp, add a Memory parent node, 5 children, type is TIMELINE_COUNTER, add dummy data. 
+3. main_window.cpp the TIMELINE_COUNTER node do not set event name, and timeline_widget.cpp do not show event name if event name is empty
