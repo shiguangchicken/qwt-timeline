@@ -32,7 +32,8 @@ void addRandomEvents(TimelineNode* node, std::mt19937& rng)
         0xff4d76ff,
     };
 
-    std::uniform_int_distribution<int> countDist(35, 65);
+    std::uniform_int_distribution<int> countDist(100000, 110000);
+    // std::uniform_int_distribution<int> countDist(35, 65);
     std::uniform_int_distribution<int> gapDist(2, 40);
     std::uniform_int_distribution<int> durationDist(8, 260);
     std::uniform_int_distribution<int> nameDist(0, static_cast<int>(kEventNames.size() - 1));

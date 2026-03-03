@@ -170,7 +170,59 @@ public:
         borderRects.reserve(512);
         QVector<QLineF> selectedBoundaryLines;
 
+        static constexpr size_t kMaxDrawnEventsInView = 1000;
+        auto collectEventsInView = [&](TimelineNode* node) {
+            std::vector<const TimelineEvent*> eventsToDraw;
+            if (node == nullptr) {
+                return eventsToDraw;
+            }
+
+            const auto& events = node->events();
+            if (events.empty()) {
+                return eventsToDraw;
+            }
+
+            auto firstVisibleIt = std::lower_bound(
+                events.begin(), events.end(), owner_->visibleStart_,
+                [](const TimelineEvent* event, uint64_t visibleStart) { return event->start < visibleStart; });
+            size_t startIndex = static_cast<size_t>(std::distance(events.begin(), firstVisibleIt));
+            while (startIndex > 0 && events[startIndex - 1]->end >= owner_->visibleStart_) {
+                --startIndex;
+            }
+
+            auto endVisibleIt = std::upper_bound(
+                events.begin() + static_cast<std::ptrdiff_t>(startIndex), events.end(), owner_->visibleEnd_,
+                [](uint64_t visibleEnd, const TimelineEvent* event) { return visibleEnd < event->start; });
+            const size_t endIndex = static_cast<size_t>(std::distance(events.begin(), endVisibleIt));
+
+            if (startIndex >= endIndex) {
+                return eventsToDraw;
+            }
+
+            const size_t visibleCount = endIndex - startIndex;
+            eventsToDraw.reserve(std::min(visibleCount, kMaxDrawnEventsInView));
+
+            if (visibleCount <= kMaxDrawnEventsInView) {
+                eventsToDraw.insert(eventsToDraw.end(), events.begin() + static_cast<std::ptrdiff_t>(startIndex),
+                                    events.begin() + static_cast<std::ptrdiff_t>(endIndex));
+                return eventsToDraw;
+            }
+
+            for (size_t i = 0; i < kMaxDrawnEventsInView; ++i) {
+                const size_t sampledOffset = (i * (visibleCount - 1)) / (kMaxDrawnEventsInView - 1);
+                eventsToDraw.push_back(events[startIndex + sampledOffset]);
+            }
+            return eventsToDraw;
+        };
+
+        std::vector<std::vector<const TimelineEvent*>> rowEventsToDraw;
+        rowEventsToDraw.reserve(visibleRows.size());
         for (const auto& item : visibleRows) {
+            rowEventsToDraw.push_back(collectEventsInView(item.node));
+        }
+
+        for (size_t rowIdx = 0; rowIdx < visibleRows.size(); ++rowIdx) {
+            const auto& item = visibleRows[rowIdx];
             const QRect rowRect = owner_->tree_->visualRect(item.index);
             if (!rowRect.isValid()) {
                 continue;
@@ -182,11 +234,7 @@ public:
                 continue;
             }
 
-            for (const TimelineEvent* event : item.node->events()) {
-                if (event->end < owner_->visibleStart_ || event->start > owner_->visibleEnd_) {
-                    continue;
-                }
-
+            for (const TimelineEvent* event : rowEventsToDraw[rowIdx]) {
                 const uint64_t clippedStart = std::max(event->start, owner_->visibleStart_);
                 const uint64_t clippedEnd = std::min(event->end, owner_->visibleEnd_);
                 const double left = xMap.transform(static_cast<double>(clippedStart));
@@ -252,15 +300,14 @@ public:
 
         // Draw event names
         painter->setPen(Qt::white);
-        for (const auto& item : visibleRows) {
+        for (size_t rowIdx = 0; rowIdx < visibleRows.size(); ++rowIdx) {
+            const auto& item = visibleRows[rowIdx];
             const QRect rowRect = owner_->tree_->visualRect(item.index);
             if (!rowRect.isValid())
                 continue;
             const int barTop = rowRect.top() + 1;
             const int barBottom = rowRect.bottom();
-            for (const TimelineEvent* event : item.node->events()) {
-                if (event->end < owner_->visibleStart_ || event->start > owner_->visibleEnd_)
-                    continue;
+            for (const TimelineEvent* event : rowEventsToDraw[rowIdx]) {
                 const uint64_t clippedStart = std::max(event->start, owner_->visibleStart_);
                 const uint64_t clippedEnd = std::min(event->end, owner_->visibleEnd_);
                 const double left = xMap.transform(static_cast<double>(clippedStart));
