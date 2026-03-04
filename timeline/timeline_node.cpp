@@ -9,9 +9,6 @@ TimelineNode::~TimelineNode()
     for (TimelineNode* child : children_) {
         delete child;
     }
-    for (TimelineEvent* event : events_) {
-        delete event;
-    }
 }
 
 TimelineNode* TimelineNode::parent()

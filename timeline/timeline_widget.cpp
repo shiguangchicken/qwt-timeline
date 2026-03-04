@@ -479,7 +479,7 @@ TimelineWidget::TimelineWidget(QWidget* parent)
 
     plotItem_->attach(plot_);
 
-    mouseTrackerTimer_.setInterval(40);
+    mouseTrackerTimer_.setInterval(30);
     mouseTrackerTimer_.setSingleShot(true);
     connect(&mouseTrackerTimer_, &QTimer::timeout, this, &TimelineWidget::flushMouseTracker);
 }
