@@ -274,12 +274,12 @@ Ensure build works with Qwt OpenGL enabled
 
 Build:
 
-cmake -S /home/meng/Documents/projects/ai-timline -B /home/meng/Documents/projects/ai-timline/build/Desktop_Qt_6_9_3-Debug -DCMAKE_BUILD_TYPE:STRING=Debug -DCMAKE_GENERATOR:STRING=Ninja -DCMAKE_COLOR_DIAGNOSTICS:BOOL=ON -DCMAKE_PREFIX_PATH:PATH=/home/meng/Qt/6.9.3/gcc_64 
+cmake -S /home/meng/Documents/projects/qwt-timeline -B /home/meng/Documents/projects/qwt-timeline/build/Desktop_Qt_6_9_3-Debug -DCMAKE_BUILD_TYPE:STRING=Debug -DCMAKE_GENERATOR:STRING=Ninja -DCMAKE_COLOR_DIAGNOSTICS:BOOL=ON -DCMAKE_PREFIX_PATH:PATH=/home/meng/Qt/6.9.3/gcc_64 
 
 cmake --build ./build/Desktop_Qt_6_9_3-Debug/
 
 Run:
-./build/Desktop_Qt_6_9_3-Debug/ai-timeline
+./build/Desktop_Qt_6_9_3-Debug/qwt-timeline
 
 
 ✅ Expected Result

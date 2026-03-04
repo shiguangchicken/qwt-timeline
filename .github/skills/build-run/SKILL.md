@@ -10,5 +10,5 @@ cmake -S . -B ./build/Desktop_Qt_6_9_3-Debug -DCMAKE_BUILD_TYPE:STRING=Debug -DC
 # Run commands
 
 ```bash
-./build/Desktop_Qt_6_9_3-Debug/ai-timline
+./build/Desktop_Qt_6_9_3-Debug/examples/qwt-timeline
 ```

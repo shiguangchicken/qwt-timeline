@@ -18,7 +18,7 @@
 - Keep timeline behavior changes inside `timeline/` unless UI shell wiring is explicitly requested.
 
 ## Project Conventions
-- App target/binary name is `ai-timline` (note spelling). Do not rename unless explicitly requested.
+- App target/binary name is `qwt-timeline` (note spelling). Do not rename unless explicitly requested.
 - `timeline/qwt` is vendored and built during CMake via `qmake` + `make` from `timeline/CMakeLists.txt`.
 - `TIMELINE_QWT_QMAKE` defaults to `/home/meng/Qt/6.9.3/gcc_64/bin/qmake`; override when using a different Qt install.
 - Preserve model/view synchronization behavior in `TimelineView` (tree scroll ↔ timeline draw updates).

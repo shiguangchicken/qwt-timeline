@@ -1,4 +1,4 @@
-# ai-timline
+# qwt-timeline
 
 A Qt timeline demo app with two synchronized timeline views, tree-based lanes, and a custom Qwt/OpenGL timeline renderer.
 
@@ -44,7 +44,7 @@ cmake --build build/Desktop_Qt_6_9_3-Debug
 ## Run
 
 ```bash
-./build/Desktop_Qt_6_9_3-Debug/ai-timline
+./build/Desktop_Qt_6_9_3-Debug/qwt-timeline
 ```
 
 ## Controls
