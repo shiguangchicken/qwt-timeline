@@ -29,6 +29,10 @@
 
 #include "theme.h"
 
+namespace {
+static constexpr size_t kMaxDrawnEventsInView = 1000;
+}  // namespace
+
 class TimelineScaleDraw : public QwtScaleDraw {
 public:
     enum class Unit { Ns, Us, Ms, S };
@@ -244,7 +248,6 @@ public:
                               QPointF(xMap.transform(static_cast<double>(owner_->visibleEnd_)), yLine));
         }
 
-        static constexpr size_t kMaxDrawnEventsInView = 1000;
         QHash<uint32_t, QVector<QRectF>> fillRectsByColor;
         QVector<QRectF> selectedFillRects;
         QVector<QLineF> selectedBoundaryLines;
@@ -252,54 +255,10 @@ public:
             it.value().reserve(1024);
         }
 
-        auto collectEventsInView = [&](TimelineNode* node) {
-            std::vector<const TimelineEvent*> eventsToDraw;
-            if (node == nullptr) {
-                return eventsToDraw;
-            }
-
-            const auto& events = node->events();
-            if (events.empty()) {
-                return eventsToDraw;
-            }
-
-            auto firstVisibleIt = std::lower_bound(
-                events.begin(), events.end(), owner_->visibleStart_,
-                [](const TimelineEvent* event, uint64_t visibleStart) { return event->start < visibleStart; });
-            size_t startIndex = static_cast<size_t>(std::distance(events.begin(), firstVisibleIt));
-            while (startIndex > 0 && events[startIndex - 1]->end >= owner_->visibleStart_) {
-                --startIndex;
-            }
-
-            auto endVisibleIt = std::upper_bound(
-                events.begin() + static_cast<std::ptrdiff_t>(startIndex), events.end(), owner_->visibleEnd_,
-                [](uint64_t visibleEnd, const TimelineEvent* event) { return visibleEnd < event->start; });
-            const size_t endIndex = static_cast<size_t>(std::distance(events.begin(), endVisibleIt));
-
-            if (startIndex >= endIndex) {
-                return eventsToDraw;
-            }
-
-            const size_t visibleCount = endIndex - startIndex;
-            eventsToDraw.reserve(std::min(visibleCount, kMaxDrawnEventsInView));
-
-            if (visibleCount <= kMaxDrawnEventsInView) {
-                eventsToDraw.insert(eventsToDraw.end(), events.begin() + static_cast<std::ptrdiff_t>(startIndex),
-                                    events.begin() + static_cast<std::ptrdiff_t>(endIndex));
-                return eventsToDraw;
-            }
-
-            for (size_t i = 0; i < kMaxDrawnEventsInView; ++i) {
-                const size_t sampledOffset = (i * (visibleCount - 1)) / (kMaxDrawnEventsInView - 1);
-                eventsToDraw.push_back(events[startIndex + sampledOffset]);
-            }
-            return eventsToDraw;
-        };
-
         std::vector<std::vector<const TimelineEvent*>> rowEventsToDraw;
         rowEventsToDraw.reserve(visibleRows.size());
         for (const auto& item : visibleRows) {
-            rowEventsToDraw.push_back(collectEventsInView(item.node));
+            rowEventsToDraw.push_back(owner_->collectEventsInView(item.node));
         }
 
         for (size_t rowIdx = 0; rowIdx < visibleRows.size(); ++rowIdx) {
@@ -423,6 +382,51 @@ public:
 private:
     TimelineWidget* owner_ = nullptr;
 };
+
+std::vector<const TimelineEvent*> TimelineWidget::collectEventsInView(TimelineNode* node) const
+{
+    std::vector<const TimelineEvent*> eventsToDraw;
+    if (node == nullptr) {
+        return eventsToDraw;
+    }
+
+    const auto& events = node->events();
+    if (events.empty()) {
+        return eventsToDraw;
+    }
+
+    auto firstVisibleIt =
+        std::lower_bound(events.begin(), events.end(), visibleStart_,
+                         [](const TimelineEvent* event, uint64_t visibleStart) { return event->start < visibleStart; });
+    size_t startIndex = static_cast<size_t>(std::distance(events.begin(), firstVisibleIt));
+    while (startIndex > 0 && events[startIndex - 1]->end >= visibleStart_) {
+        --startIndex;
+    }
+
+    auto endVisibleIt =
+        std::upper_bound(events.begin() + static_cast<std::ptrdiff_t>(startIndex), events.end(), visibleEnd_,
+                         [](uint64_t visibleEnd, const TimelineEvent* event) { return visibleEnd < event->start; });
+    const size_t endIndex = static_cast<size_t>(std::distance(events.begin(), endVisibleIt));
+
+    if (startIndex >= endIndex) {
+        return eventsToDraw;
+    }
+
+    const size_t visibleCount = endIndex - startIndex;
+    eventsToDraw.reserve(std::min(visibleCount, kMaxDrawnEventsInView));
+
+    if (visibleCount <= kMaxDrawnEventsInView) {
+        eventsToDraw.insert(eventsToDraw.end(), events.begin() + static_cast<std::ptrdiff_t>(startIndex),
+                            events.begin() + static_cast<std::ptrdiff_t>(endIndex));
+        return eventsToDraw;
+    }
+
+    for (size_t i = 0; i < kMaxDrawnEventsInView; ++i) {
+        const size_t sampledOffset = (i * (visibleCount - 1)) / (kMaxDrawnEventsInView - 1);
+        eventsToDraw.push_back(events[startIndex + sampledOffset]);
+    }
+    return eventsToDraw;
+}
 
 TimelineWidget::TimelineWidget(QWidget* parent)
     : QWidget(parent), plot_(new QwtPlot(this)), plotItem_(new TimelinePlotItem(this))
