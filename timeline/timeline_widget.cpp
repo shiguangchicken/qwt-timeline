@@ -13,12 +13,14 @@
 #include <QVector>
 #include <QWheelEvent>
 #include <algorithm>
+#include <cmath>
 #include <cstdlib>
 #include <functional>
 #include <qwt_plot.h>
 #include <qwt_plot_grid.h>
 #include <qwt_plot_item.h>
 #include <qwt_plot_opengl_canvas.h>
+#include <qwt_scale_div.h>
 #include <qwt_scale_draw.h>
 #include <qwt_scale_map.h>
 #include <qwt_scale_widget.h>
@@ -29,20 +31,21 @@
 
 class TimelineScaleDraw : public QwtScaleDraw {
 public:
+    enum class Unit { Ns, Us, Ms, S };
+
     virtual double extent(const QFont& f) const override { return QwtScaleDraw::extent(f); }
     virtual void drawTick(QPainter* p, double v, double l) const override { QwtScaleDraw::drawTick(p, v, l); }
     virtual void drawBackbone(QPainter* p) const override { QwtScaleDraw::drawBackbone(p); }
     virtual void drawLabel(QPainter* p, double v) const override { QwtScaleDraw::drawLabel(p, v); }
     void draw(QPainter* painter, const QPalette& palette) const override
     {
+        syncUnitFromScaleDiv();
         QwtScaleDraw::draw(painter, palette);
         if (!showMouseText_) {
             return;
         }
 
-        uint64_t factor = 1;
-        const char* unit = getTimeUnit(static_cast<int64_t>(mouseTime_), factor);
-        const QString text = QString::number(mouseTime_ / static_cast<double>(factor)) + " " + unit;
+        const QString text = formatTime(mouseTime_, currentUnit_);
 
         painter->save();
         painter->setPen(QPen(QColor::fromRgba(timeline_color::CURRENT_TIME), 1));
@@ -64,27 +67,99 @@ public:
 
     QwtText label(double value) const override
     {
-        uint64_t factor = 1;
-        const char* unit = getTimeUnit(static_cast<int64_t>(value), factor);
-        QString labelStr = QString::number(value / static_cast<double>(factor));
-        return QwtText(labelStr + " " + unit);
+        syncUnitFromScaleDiv();
+        return QwtText(formatTime(value, currentUnit_));
     }
 
-    static const char* getTimeUnit(int64_t time, uint64_t& factor)
+    QString formatTime(double ns, Unit unit) const
     {
-        uint64_t value = std::abs(time);
-        if (value < 1000) {
-            factor = 1;
-            return "ns";
-        } else if (value < 1000 * 1000) {
-            factor = 1000;
-            return "us";
-        } else if (value < 1000 * 1000 * 1000) {
-            factor = 1000 * 1000;
-            return "ms";
-        } else {
-            factor = 1000 * 1000 * 1000;
-            return "s";
+        double factor = 1.0;
+        QString suffix;
+        switch (unit) {
+            case Unit::Ns:
+                factor = 1.0;
+                suffix = "ns";
+                break;
+            case Unit::Us:
+                factor = 1000.0;
+                suffix = "us";
+                break;
+            case Unit::Ms:
+                factor = 1000.0 * 1000.0;
+                suffix = "ms";
+                break;
+            case Unit::S:
+                factor = 1000.0 * 1000.0 * 1000.0;
+                suffix = "s";
+                break;
+        }
+
+        double scaled = ns / factor;
+        if (std::abs(scaled) < 0.0005) {
+            scaled = 0.0;
+        }
+
+        QString number = QString::number(scaled, 'f', 3);
+        while (number.endsWith('0')) {
+            number.chop(1);
+        }
+        if (number.endsWith('.')) {
+            number.chop(1);
+        }
+        if (number == "-0") {
+            number = "0";
+        }
+
+        if (showPositiveSign_ && scaled > 0.0) {
+            number.prepend('+');
+        }
+
+        return number + suffix;
+    }
+
+private:
+    static Unit chooseUnitFromSpan(double spanNs)
+    {
+        if (spanNs >= 1000.0 * 1000.0 * 1000.0) {
+            return Unit::S;
+        }
+        if (spanNs >= 1000.0 * 1000.0) {
+            return Unit::Ms;
+        }
+        if (spanNs >= 1000.0) {
+            return Unit::Us;
+        }
+        return Unit::Ns;
+    }
+
+    void updateUnitFromScaleDiv(const QwtScaleDiv& scaleDiv) const
+    {
+        const double lower = scaleDiv.lowerBound();
+        const double upper = scaleDiv.upperBound();
+        const double span = std::abs(upper - lower);
+
+        if (span <= 0.0) {
+            currentUnit_ = Unit::Ns;
+            showPositiveSign_ = false;
+            return;
+        }
+
+        currentUnit_ = chooseUnitFromSpan(span);
+        showPositiveSign_ = (lower < 0.0 && upper > 0.0);
+    }
+
+    void syncUnitFromScaleDiv() const
+    {
+        const QwtScaleDiv& div = scaleDiv();
+        const double lower = div.lowerBound();
+        const double upper = div.upperBound();
+
+        if (!hasCachedScaleDiv_ || !qFuzzyCompare(lower + 1.0, cachedLower_ + 1.0) ||
+            !qFuzzyCompare(upper + 1.0, cachedUpper_ + 1.0)) {
+            cachedLower_ = lower;
+            cachedUpper_ = upper;
+            hasCachedScaleDiv_ = true;
+            updateUnitFromScaleDiv(div);
         }
     }
 
@@ -92,6 +167,11 @@ private:
     bool showMouseText_ = false;
     double mouseTime_ = 0.0;
     double mouseX_ = 0.0;
+    mutable Unit currentUnit_ = Unit::Ns;
+    mutable bool showPositiveSign_ = false;
+    mutable bool hasCachedScaleDiv_ = false;
+    mutable double cachedLower_ = 0.0;
+    mutable double cachedUpper_ = 0.0;
 };
 
 class TimelineWidget::TimelinePlotItem : public QwtPlotItem {
@@ -164,11 +244,14 @@ public:
                               QPointF(xMap.transform(static_cast<double>(owner_->visibleEnd_)), yLine));
         }
 
+        static constexpr size_t kMaxDrawnEventsInView = 1000;
         QHash<uint32_t, QVector<QRectF>> fillRectsByColor;
         QVector<QRectF> selectedFillRects;
         QVector<QLineF> selectedBoundaryLines;
+        for (auto it = fillRectsByColor.begin(); it != fillRectsByColor.end(); ++it) {
+            it.value().reserve(1024);
+        }
 
-        static constexpr size_t kMaxDrawnEventsInView = 1000;
         auto collectEventsInView = [&](TimelineNode* node) {
             std::vector<const TimelineEvent*> eventsToDraw;
             if (node == nullptr) {

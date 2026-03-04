@@ -4,10 +4,13 @@
 #include <QElapsedTimer>
 #include <QVBoxLayout>
 #include <array>
+#include <atomic>
 #include <functional>
+#include <future>
 #include <memory>
 #include <random>
 #include <string>
+#include <vector>
 
 #include "./ui_mainwindow.h"
 #include "timeline/theme.h"
@@ -16,6 +19,8 @@
 #include "timeline/timeline_view.h"
 
 namespace {
+
+std::atomic<uint64_t> totoal_event_count = 0;
 
 void addRandomEvents(TimelineNode* node, std::mt19937& rng)
 {
@@ -34,8 +39,7 @@ void addRandomEvents(TimelineNode* node, std::mt19937& rng)
         0xff4d76ff,
     };
 
-    std::uniform_int_distribution<int> countDist(100000, 110000);
-    // std::uniform_int_distribution<int> countDist(35, 65);
+    std::uniform_int_distribution<int> countDist(200000, 210000);
     std::uniform_int_distribution<int> gapDist(2, 40);
     std::uniform_int_distribution<int> durationDist(8, 260);
     std::uniform_int_distribution<int> nameDist(0, static_cast<int>(kEventNames.size() - 1));
@@ -53,6 +57,7 @@ void addRandomEvents(TimelineNode* node, std::mt19937& rng)
         event->color = kColors[colorDist(rng)];
         node->addEvent(event);
         cursor = event->end;
+        totoal_event_count++;
     }
 }
 
@@ -74,7 +79,7 @@ void addCounterEvents(TimelineNode* node, std::mt19937& rng)
     std::uniform_real_distribution<double> valueDist(15.0, 220.0);
     std::uniform_int_distribution<int> colorDist(0, static_cast<int>(kCounterColors.size() - 1));
 
-    const int eventCount = 100000;
+    const int eventCount = 200000;
     uint64_t cursor = 0;
     for (int i = 0; i < eventCount; ++i) {
         cursor += static_cast<uint64_t>(gapDist(rng));
@@ -86,6 +91,7 @@ void addCounterEvents(TimelineNode* node, std::mt19937& rng)
         event->value = valueDist(rng);
         node->addEvent(event);
         cursor = event->end;
+        totoal_event_count++;
     }
 }
 
@@ -112,13 +118,22 @@ std::unique_ptr<TimelineNode> createDemoTree(uint32_t seedShift)
     }
     root->addChild(memory);
 
-    std::mt19937 rng(1337u + seedShift);
+    const uint32_t baseSeed = 1337u + seedShift;
+
+    std::vector<std::future<void>> futures;
+    futures.reserve(static_cast<size_t>(memory->childCount()));
     for (int i = 0; i < memory->childCount(); ++i) {
-        addCounterEvents(memory->childAt(i), rng);
+        TimelineNode* memoryNode = memory->childAt(i);
+        const uint32_t nodeSeed = baseSeed + 10000u + static_cast<uint32_t>(i);
+        futures.push_back(std::async(std::launch::async, [memoryNode, nodeSeed]() {
+            std::mt19937 localRng(nodeSeed);
+            addCounterEvents(memoryNode, localRng);
+            memoryNode->sortEvents();
+        }));
     }
-    for (int i = 0; i < memory->childCount(); ++i) {
-        memory->childAt(i)->sortEvents();
-    }
+
+    std::vector<TimelineNode*> randomEventNodes;
+    randomEventNodes.reserve(static_cast<size_t>(cpu->childCount() + gpu->childCount()));
     root->foreachNode([&](TimelineNode* node) {
         if (node == root.get() || node == cpu || node == gpu || node == memory) {
             return;
@@ -126,9 +141,23 @@ std::unique_ptr<TimelineNode> createDemoTree(uint32_t seedShift)
         if (node->type() == TimelineNode::TIMELINE_COUNTER) {
             return;
         }
-        addRandomEvents(node, rng);
-        node->sortEvents();
+        randomEventNodes.push_back(node);
     });
+
+    futures.reserve(futures.size() + randomEventNodes.size());
+    for (size_t i = 0; i < randomEventNodes.size(); ++i) {
+        TimelineNode* node = randomEventNodes[i];
+        const uint32_t nodeSeed = baseSeed + 20000u + static_cast<uint32_t>(i);
+        futures.push_back(std::async(std::launch::async, [node, nodeSeed]() {
+            std::mt19937 localRng(nodeSeed);
+            addRandomEvents(node, localRng);
+            node->sortEvents();
+        }));
+    }
+
+    for (auto& future : futures) {
+        future.get();
+    }
 
     return root;
 }
@@ -153,6 +182,7 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent), ui(new Ui::MainWi
     demoTreeBuildTimer.start();
     root1_ = createDemoTree(0);
     root2_ = createDemoTree(2026);
+    qDebug() << "Total event count:" << totoal_event_count;
     qDebug() << "createDemoTree total cost time (ms):" << demoTreeBuildTimer.elapsed();
 
     timeline1_->setRootNode(root1_.get());
