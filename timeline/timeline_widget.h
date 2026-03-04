@@ -1,17 +1,19 @@
 #pragma once
 
-#include "timeline_node_model.h"
-
 #include <QPersistentModelIndex>
 #include <QPoint>
 #include <QTimer>
 #include <QWidget>
+#include <vector>
+
+#include "timeline_node_model.h"
 
 class QTreeView;
 class QwtPlot;
 class QMouseEvent;
 class QWheelEvent;
 class QEvent;
+class TimelineNode;
 struct TimelineEvent;
 
 class TimelineWidget : public QWidget {
@@ -42,6 +44,7 @@ private:
     void flushMouseTracker();
     void applyZoomAround(double anchorTime, double zoomFactor);
     void updateSelectionFromPosition(const QPoint& pos);
+    std::vector<const TimelineEvent*> collectEventsInView(TimelineNode* node) const;
 
     class TimelinePlotItem;
 

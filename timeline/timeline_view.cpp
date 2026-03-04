@@ -1,15 +1,14 @@
 #include "timeline_view.h"
 
-#include "theme.h"
-
 #include <QGridLayout>
 #include <QHeaderView>
 #include <QPainter>
 #include <QScrollBar>
 #include <QStyledItemDelegate>
 #include <QTreeView>
-
 #include <algorithm>
+
+#include "theme.h"
 
 namespace {
 
@@ -17,10 +16,7 @@ constexpr int kNodeRowHeight = 60;
 
 class TimelineNodeItemDelegate : public QStyledItemDelegate {
 public:
-    explicit TimelineNodeItemDelegate(QObject* parent = nullptr)
-        : QStyledItemDelegate(parent)
-    {
-    }
+    explicit TimelineNodeItemDelegate(QObject* parent = nullptr) : QStyledItemDelegate(parent) {}
 
     QSize sizeHint(const QStyleOptionViewItem& option, const QModelIndex& index) const override
     {
@@ -32,16 +28,27 @@ public:
     void paint(QPainter* painter, const QStyleOptionViewItem& option, const QModelIndex& index) const override
     {
         QStyledItemDelegate::paint(painter, option, index);
+        painter->setBrush(Qt::NoBrush);
+
+        if (index.column() != 0)
+            return;
+
+        auto view = qobject_cast<QTreeView*>(parent());
+        if (!view)
+            return;
 
         painter->save();
-        painter->setBrush(Qt::NoBrush);
         painter->setPen(QPen(QColor::fromRgba(timeline_color::ROW_LINE), 1));
-        painter->drawRect(option.rect.adjusted(0, 0, -1, -1));
+
+        int y = option.rect.bottom() - 1;
+
+        painter->drawLine(0, y, view->viewport()->width(), y);
+
         painter->restore();
     }
 };
 
-} // namespace
+}  // namespace
 
 TimelineView::TimelineView(QWidget* parent)
     : QWidget(parent)
@@ -80,9 +87,8 @@ TimelineView::TimelineView(QWidget* parent)
         syncVerticalScrollFromTree();
         timeline_widget_->draw();
     });
-    connect(node_view_->verticalScrollBar(), &QScrollBar::rangeChanged, this, [this](int, int) {
-        syncVerticalScrollFromTree();
-    });
+    connect(node_view_->verticalScrollBar(), &QScrollBar::rangeChanged, this,
+            [this](int, int) { syncVerticalScrollFromTree(); });
 
     connect(horizontal_scroll_bar_, &QScrollBar::valueChanged, this, [this](int value) {
         const uint64_t start = static_cast<uint64_t>(value);
@@ -90,9 +96,8 @@ TimelineView::TimelineView(QWidget* parent)
         timeline_widget_->setTimeRange(start, end);
     });
 
-    connect(timeline_widget_, &TimelineWidget::timeRangeChanged, this, [this](uint64_t start, uint64_t end) {
-        updateHorizontalScrollBarFromRange(start, end);
-    });
+    connect(timeline_widget_, &TimelineWidget::timeRangeChanged, this,
+            [this](uint64_t start, uint64_t end) { updateHorizontalScrollBarFromRange(start, end); });
 
     connect(node_view_, &QTreeView::expanded, this, [this](const QModelIndex&) {
         syncVerticalScrollFromTree();
