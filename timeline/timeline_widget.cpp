@@ -31,6 +31,26 @@
 
 namespace {
 static constexpr size_t kMaxDrawnEventsInView = 1000;
+
+const TimelineEvent* findEventContainingTime(const std::vector<TimelineEvent*>& events, uint64_t time)
+{
+    if (events.empty()) {
+        return nullptr;
+    }
+
+    const auto it = std::upper_bound(events.begin(), events.end(), time,
+                                     [](uint64_t value, const TimelineEvent* event) { return value < event->start; });
+    if (it == events.begin()) {
+        return nullptr;
+    }
+
+    const TimelineEvent* candidate = *(it - 1);
+    if (candidate->start <= time && candidate->end >= time) {
+        return candidate;
+    }
+
+    return nullptr;
+}
 }  // namespace
 
 class TimelineScaleDraw : public QwtScaleDraw {
@@ -695,6 +715,7 @@ void TimelineWidget::flushMouseTracker()
 
     const double time = plot_->invTransform(QwtPlot::xBottom, pendingMousePos_.x());
     mouseTrackerTime_ = std::clamp(time, static_cast<double>(visibleStart_), static_cast<double>(visibleEnd_));
+    const uint64_t mouseTime = static_cast<uint64_t>(mouseTrackerTime_);
     hasPendingMousePos_ = false;
     showMouseTracker_ = true;
 
@@ -718,9 +739,10 @@ void TimelineWidget::flushMouseTracker()
                 const int barTop = rowRect.top() + 1;
                 const int barBottom = rowRect.bottom();
                 if (pendingMousePos_.y() >= barTop && pendingMousePos_.y() <= barBottom) {
-                    for (const TimelineEvent* event : node->events()) {
-                        if (event->end < visibleStart_ || event->start > visibleEnd_)
+                    if (const TimelineEvent* event = findEventContainingTime(node->events(), mouseTime)) {
+                        if (event->end < visibleStart_ || event->start > visibleEnd_) {
                             continue;
+                        }
                         const uint64_t clippedStart = std::max(event->start, visibleStart_);
                         const uint64_t clippedEnd = std::min(event->end, visibleEnd_);
                         const double left = plot_->transform(QwtPlot::xBottom, static_cast<double>(clippedStart));
@@ -733,7 +755,6 @@ void TimelineWidget::flushMouseTracker()
                                     .arg(event->end);
                             QToolTip::showText(plot_->canvas()->mapToGlobal(pendingMousePos_), tip, plot_->canvas());
                             found = true;
-                            break;
                         }
                     }
                 }
@@ -793,6 +814,9 @@ void TimelineWidget::updateSelectionFromPosition(const QPoint& pos)
     bool found = false;
     QPersistentModelIndex selectedIndex;
     const TimelineEvent* selectedEvent = nullptr;
+    const uint64_t mouseTime =
+        static_cast<uint64_t>(std::clamp(plot_->invTransform(QwtPlot::xBottom, pos.x()),
+                                         static_cast<double>(visibleStart_), static_cast<double>(visibleEnd_)));
 
     std::function<void(const QModelIndex&)> visitVisible = [&](const QModelIndex& parentIndex) {
         if (found) {
@@ -825,8 +849,11 @@ void TimelineWidget::updateSelectionFromPosition(const QPoint& pos)
                 continue;
             }
 
-            for (const TimelineEvent* event : node->events()) {
+            if (const TimelineEvent* event = findEventContainingTime(node->events(), mouseTime)) {
                 if (event->end < visibleStart_ || event->start > visibleEnd_) {
+                    if (tree_->isExpanded(idx)) {
+                        visitVisible(idx);
+                    }
                     continue;
                 }
 
