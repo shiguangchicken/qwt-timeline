@@ -13,5 +13,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 find_package(QT NAMES Qt6 Qt5 REQUIRED COMPONENTS Widgets OpenGLWidgets)
 find_package(Qt${QT_VERSION_MAJOR} REQUIRED COMPONENTS Widgets OpenGLWidgets)
 
+set(TIMELINE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/timeline)
+
 add_subdirectory(timeline)
 add_subdirectory(examples)

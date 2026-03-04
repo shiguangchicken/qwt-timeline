@@ -12,11 +12,11 @@
 #include <string>
 #include <vector>
 
-#include "./ui_mainwindow.h"
-#include "timeline/theme.h"
-#include "timeline/timeline_event.h"
-#include "timeline/timeline_node.h"
-#include "timeline/timeline_view.h"
+#include "theme.h"
+#include "timeline_event.h"
+#include "timeline_node.h"
+#include "timeline_view.h"
+#include "ui_mainwindow.h"
 
 namespace {
 
