@@ -166,8 +166,6 @@ public:
 
         QHash<uint32_t, QVector<QRectF>> fillRectsByColor;
         QVector<QRectF> selectedFillRects;
-        QVector<QRectF> borderRects;
-        borderRects.reserve(512);
         QVector<QLineF> selectedBoundaryLines;
 
         static constexpr size_t kMaxDrawnEventsInView = 1000;
@@ -238,7 +236,11 @@ public:
                 const uint64_t clippedStart = std::max(event->start, owner_->visibleStart_);
                 const uint64_t clippedEnd = std::min(event->end, owner_->visibleEnd_);
                 const double left = xMap.transform(static_cast<double>(clippedStart));
-                const double right = xMap.transform(static_cast<double>(clippedEnd));
+                double right = xMap.transform(static_cast<double>(clippedEnd));
+                // if the event is too narrow to be visible, we still want to show it with a minimum width
+                if (right - left < 1.0) {
+                    right = left + 1.0;
+                }
                 const double rowTop = static_cast<double>(barTop);
                 const double rowBottom = static_cast<double>(barBottom);
                 double rectTop = rowTop;
@@ -273,7 +275,6 @@ public:
                 } else {
                     fillRectsByColor[event->color].push_back(rect);
                 }
-                borderRects.push_back(rect);
             }
         }
 
@@ -290,12 +291,6 @@ public:
         if (!selectedFillRects.isEmpty()) {
             painter->setBrush(QColor::fromRgba(timeline_color::HIGHLIGHT));
             painter->drawRects(selectedFillRects.constData(), selectedFillRects.size());
-        }
-
-        if (!borderRects.isEmpty()) {
-            painter->setBrush(Qt::NoBrush);
-            painter->setPen(QPen(QColor::fromRgba(timeline_color::EVENT_EDGE_LINE), 1));
-            painter->drawRects(borderRects.constData(), borderRects.size());
         }
 
         // Draw event names

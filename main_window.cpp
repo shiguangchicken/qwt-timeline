@@ -1,5 +1,7 @@
 #include "main_window.h"
 
+#include <QDebug>
+#include <QElapsedTimer>
 #include <QVBoxLayout>
 #include <array>
 #include <functional>
@@ -72,7 +74,7 @@ void addCounterEvents(TimelineNode* node, std::mt19937& rng)
     std::uniform_real_distribution<double> valueDist(15.0, 220.0);
     std::uniform_int_distribution<int> colorDist(0, static_cast<int>(kCounterColors.size() - 1));
 
-    const int eventCount = 40;
+    const int eventCount = 100000;
     uint64_t cursor = 0;
     for (int i = 0; i < eventCount; ++i) {
         cursor += static_cast<uint64_t>(gapDist(rng));
@@ -114,6 +116,9 @@ std::unique_ptr<TimelineNode> createDemoTree(uint32_t seedShift)
     for (int i = 0; i < memory->childCount(); ++i) {
         addCounterEvents(memory->childAt(i), rng);
     }
+    for (int i = 0; i < memory->childCount(); ++i) {
+        memory->childAt(i)->sortEvents();
+    }
     root->foreachNode([&](TimelineNode* node) {
         if (node == root.get() || node == cpu || node == gpu || node == memory) {
             return;
@@ -122,9 +127,9 @@ std::unique_ptr<TimelineNode> createDemoTree(uint32_t seedShift)
             return;
         }
         addRandomEvents(node, rng);
+        node->sortEvents();
     });
 
-    root->sortEvents();
     return root;
 }
 
@@ -144,8 +149,11 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent), ui(new Ui::MainWi
     centralLayout->addWidget(timeline1_);
     centralLayout->addWidget(timeline2_);
 
+    QElapsedTimer demoTreeBuildTimer;
+    demoTreeBuildTimer.start();
     root1_ = createDemoTree(0);
     root2_ = createDemoTree(2026);
+    qDebug() << "createDemoTree total cost time (ms):" << demoTreeBuildTimer.elapsed();
 
     timeline1_->setRootNode(root1_.get());
     timeline2_->setRootNode(root2_.get());
@@ -153,5 +161,15 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent), ui(new Ui::MainWi
 
 MainWindow::~MainWindow()
 {
+    root1_->foreachNode([](TimelineNode* node) {
+        for (TimelineEvent* event : node->events()) {
+            delete event;
+        }
+    });
+    root2_->foreachNode([](TimelineNode* node) {
+        for (TimelineEvent* event : node->events()) {
+            delete event;
+        }
+    });
     delete ui;
 }

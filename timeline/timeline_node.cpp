@@ -207,16 +207,6 @@ void TimelineNode::sortEvents()
 {
     std::sort(events_.begin(), events_.end(),
               [](const TimelineEvent* lhs, const TimelineEvent* rhs) { return lhs->start < rhs->start; });
-
-    for (std::size_t i = 0; i < events_.size(); ++i) {
-        TimelineEvent* current = events_[i];
-        current->pre = (i == 0) ? nullptr : events_[i - 1];
-        current->next = (i + 1 < events_.size()) ? events_[i + 1] : nullptr;
-    }
-
-    for (TimelineNode* child : children_) {
-        child->sortEvents();
-    }
 }
 
 uint64_t TimelineNode::minTime() const
