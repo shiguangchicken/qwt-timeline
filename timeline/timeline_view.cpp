@@ -115,9 +115,14 @@ void TimelineView::setRootNode(TimelineNode* rootNode)
     node_model_->setRootNode(rootNode_);
 
     if (rootNode_ != nullptr) {
-        rootNode_->sortEvents();
-        fullMin_ = rootNode_->minTime();
-        fullMax_ = rootNode_->maxTime();
+        fullMin_ = std::numeric_limits<uint64_t>::max();
+        fullMax_ = 0;
+        rootNode_->foreachNode([this](TimelineNode* node) {
+            if (node->isVisible()) {
+                fullMin_ = std::min(fullMin_, node->minTime());
+                fullMax_ = std::max(fullMax_, node->maxTime());
+            }
+        });
     } else {
         fullMin_ = 0;
         fullMax_ = 0;

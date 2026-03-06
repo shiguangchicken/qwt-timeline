@@ -200,59 +200,54 @@ private:
 };
 
 class TimelineWidget::TimelinePlotItem : public QwtPlotItem {
+    struct RowNode {
+        TimelineNode* node = nullptr;
+        QModelIndex index;
+    };
+
 public:
     explicit TimelinePlotItem(TimelineWidget* owner) : owner_(owner) { setZ(20.0); }
+
+    void collectVisibleRows(std::vector<RowNode>& visibleRows, int rowCounter) const
+    {
+        std::function<void(const QModelIndex&)> collect = [&](const QModelIndex& parentIndex) {
+            const int rows = owner_->model_->rowCount(parentIndex);
+            const QRect viewRect = owner_->tree_->viewport()->rect();
+            for (int r = 0; r < rows; ++r) {
+                const QModelIndex idx = owner_->model_->index(r, 0, parentIndex);
+                auto* node = owner_->model_->nodeFromIndex(idx);
+                if (node == nullptr) {
+                    continue;
+                }
+
+                const QRect rowRect = owner_->tree_->visualRect(idx);
+                if (rowRect.isValid() && viewRect.intersects(rowRect)) {
+                    visibleRows.push_back({node, idx});
+                    ++rowCounter;
+                }
+
+                if (owner_->tree_->isExpanded(idx)) {
+                    collect(idx);
+                }
+            }
+        };
+
+        collect(QModelIndex());
+    }
 
     void draw(QPainter* painter,
               const QwtScaleMap& xMap,
               const QwtScaleMap& yMap,
               const QRectF& canvasRect) const override
     {
-        Q_UNUSED(canvasRect);
         if (owner_ == nullptr || owner_->model_ == nullptr || owner_->tree_ == nullptr) {
             return;
         }
 
-        struct RowNode {
-            TimelineNode* node = nullptr;
-            QModelIndex index;
-        };
-
         std::vector<RowNode> visibleRows;
-        visibleRows.reserve(128);
-
-        std::function<void(const QModelIndex&, int&)> collect = [&](const QModelIndex& parentIndex, int& rowCounter) {
-            const int rows = owner_->model_->rowCount(parentIndex);
-            for (int r = 0; r < rows; ++r) {
-                const QModelIndex idx = owner_->model_->index(r, 0, parentIndex);
-                auto* node = owner_->model_->nodeFromIndex(idx);
-                if (node != nullptr) {
-                    visibleRows.push_back({node, idx});
-                    ++rowCounter;
-                    if (owner_->tree_->isExpanded(idx)) {
-                        collect(idx, rowCounter);
-                    }
-                }
-            }
-        };
-
+        visibleRows.reserve(64);
         int rowCounter = 0;
-        collect(QModelIndex(), rowCounter);
-
-        for (const auto& item : visibleRows) {
-            if (item.node->type() == TimelineNode::TIMELINE_COUNTER) {
-                double maxValue = 0.0;
-                for (const BaseEvent* event : item.node->events()) {
-                    if (const CounterTimelineEvent* counterEvent = dynamic_cast<const CounterTimelineEvent*>(event)) {
-                        maxValue = std::max(maxValue, counterEvent->value);
-                    }
-                }
-                if (maxValue <= 0.0) {
-                    maxValue = 1.0;
-                }
-                item.node->setMaxCounterValue(maxValue);
-            }
-        }
+        collectVisibleRows(visibleRows, rowCounter);
 
         painter->save();
         painter->setRenderHint(QPainter::Antialiasing, false);
@@ -273,7 +268,7 @@ public:
         QVector<QRectF> selectedFillRects;
         QVector<QLineF> selectedBoundaryLines;
         for (auto it = fillRectsByColor.begin(); it != fillRectsByColor.end(); ++it) {
-            it.value().reserve(1024);
+            it.value().reserve(kMaxDrawnEventsInView);
         }
 
         // If a Timeline event is selected, collect the entire chain (pre/next)
@@ -624,6 +619,12 @@ void TimelineWidget::mouseMoveEvent(QMouseEvent* event)
 {
     scheduleMouseTrackerUpdate(event->position().toPoint());
     QWidget::mouseMoveEvent(event);
+}
+
+void TimelineWidget::resizeEvent(QResizeEvent* event)
+{
+    QWidget::resizeEvent(event);
+    draw();
 }
 
 bool TimelineWidget::eventFilter(QObject* watched, QEvent* event)

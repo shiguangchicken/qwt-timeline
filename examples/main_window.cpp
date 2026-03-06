@@ -117,7 +117,7 @@ void addRelation(TimelineNode* node1, TimelineNode* node2)
 
 std::unique_ptr<TimelineNode> createDemoTree(uint32_t seedShift)
 {
-    auto root = std::make_unique<TimelineNode>("Root", TimelineNode::TIMELINE_AREA);
+    auto root = std::make_unique<TimelineNode>("Root", TimelineNode::TIMELINE);
 
     auto* cpu = new TimelineNode("CPU");
     for (int i = 0; i <= 10; ++i) {

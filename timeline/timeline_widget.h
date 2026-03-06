@@ -11,6 +11,7 @@
 class QTreeView;
 class QwtPlot;
 class QMouseEvent;
+class QResizeEvent;
 class QWheelEvent;
 class QEvent;
 class TimelineNode;
@@ -36,6 +37,7 @@ signals:
 
 protected:
     void mouseMoveEvent(QMouseEvent* event) override;
+    void resizeEvent(QResizeEvent* event) override;
     bool eventFilter(QObject* watched, QEvent* event) override;
 
 private:

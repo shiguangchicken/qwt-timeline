@@ -13,7 +13,6 @@ class TimelineNode {
 public:
     enum NodeType {
         TIMELINE,
-        TIMELINE_AREA,
         TIMELINE_COUNTER,
     };
 
@@ -86,4 +85,6 @@ private:
     bool expand_ = true;
     bool visible_ = true;
     double maxCounterValue_ = 0.0;
+    uint64_t minTime_ = 0;
+    uint64_t maxTime_ = 0;
 };

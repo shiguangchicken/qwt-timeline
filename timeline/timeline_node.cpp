@@ -199,42 +199,36 @@ void TimelineNode::sortEvents()
 {
     std::sort(events_.begin(), events_.end(),
               [](const BaseEvent* lhs, const BaseEvent* rhs) { return lhs->start < rhs->start; });
+
+    // set max value after sorted
+    double maxValue = 0.0;
+    uint64_t minTime = std::numeric_limits<uint64_t>::max();
+    uint64_t maxTime = 0;
+    for (const BaseEvent* event : events_) {
+        const CounterTimelineEvent* counterEvent = dynamic_cast<const CounterTimelineEvent*>(event);
+        if (type_ == TIMELINE_COUNTER && counterEvent) {
+            maxValue = std::max(maxValue, counterEvent->value);
+        }
+        minTime = std::min(minTime, event->start);
+        maxTime = std::max(maxTime, event->start);
+    }
+    if (maxValue <= 0.0) {
+        maxValue = 1.0;
+    }
+    setMaxCounterValue(maxValue);
+
+    minTime_ = minTime;
+    maxTime_ = maxTime;
 }
 
 uint64_t TimelineNode::minTime() const
 {
-    uint64_t minValue = std::numeric_limits<uint64_t>::max();
-    bool hasValue = false;
-
-    for (const BaseEvent* event : events_) {
-        minValue = std::min(minValue, event->start);
-        hasValue = true;
-    }
-
-    for (const TimelineNode* child : children_) {
-        const uint64_t childMin = child->minTime();
-        if (childMin != std::numeric_limits<uint64_t>::max()) {
-            minValue = std::min(minValue, childMin);
-            hasValue = true;
-        }
-    }
-
-    return hasValue ? minValue : 0;
+    return minTime_;
 }
 
 uint64_t TimelineNode::maxTime() const
 {
-    uint64_t maxValue = 0;
-
-    for (const BaseEvent* event : events_) {
-        maxValue = std::max(maxValue, event->end);
-    }
-
-    for (const TimelineNode* child : children_) {
-        maxValue = std::max(maxValue, child->maxTime());
-    }
-
-    return maxValue;
+    return maxTime_;
 }
 
 void TimelineNode::setMaxCounterValue(double maxValue)
