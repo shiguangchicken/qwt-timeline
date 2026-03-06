@@ -25,6 +25,7 @@
 #include <qwt_scale_map.h>
 #include <qwt_scale_widget.h>
 #include <qwt_text.h>
+#include <unordered_set>
 #include <vector>
 
 #include "theme.h"
@@ -32,19 +33,19 @@
 namespace {
 static constexpr size_t kMaxDrawnEventsInView = 1000;
 
-const TimelineEvent* findEventContainingTime(const std::vector<TimelineEvent*>& events, uint64_t time)
+const BaseEvent* findEventContainingTime(const std::vector<BaseEvent*>& events, uint64_t time)
 {
     if (events.empty()) {
         return nullptr;
     }
 
     const auto it = std::upper_bound(events.begin(), events.end(), time,
-                                     [](uint64_t value, const TimelineEvent* event) { return value < event->start; });
+                                     [](uint64_t value, const BaseEvent* event) { return value < event->start; });
     if (it == events.begin()) {
         return nullptr;
     }
 
-    const TimelineEvent* candidate = *(it - 1);
+    const BaseEvent* candidate = *(it - 1);
     if (candidate->start <= time && candidate->end >= time) {
         return candidate;
     }
@@ -241,7 +242,7 @@ public:
         for (const auto& item : visibleRows) {
             if (item.node->type() == TimelineNode::TIMELINE_COUNTER) {
                 double maxValue = 0.0;
-                for (const TimelineEvent* event : item.node->events()) {
+                for (const BaseEvent* event : item.node->events()) {
                     if (const CounterTimelineEvent* counterEvent = dynamic_cast<const CounterTimelineEvent*>(event)) {
                         maxValue = std::max(maxValue, counterEvent->value);
                     }
@@ -275,7 +276,28 @@ public:
             it.value().reserve(1024);
         }
 
-        std::vector<std::vector<const TimelineEvent*>> rowEventsToDraw;
+        // If a Timeline event is selected, collect the entire chain (pre/next)
+        std::unordered_set<const BaseEvent*> highlightedEvents;
+        if (owner_->hasSelectedEvent_ && owner_->selectedEvent_ != nullptr) {
+            if (owner_->selectedEvent_->type() == EventType::Timeline) {
+                const TimelineEvent* t = dynamic_cast<const TimelineEvent*>(owner_->selectedEvent_);
+                if (t != nullptr) {
+                    highlightedEvents.insert(t);
+                    const TimelineEvent* cur = t->next;
+                    while (cur != nullptr && cur->type() == EventType::Timeline) {
+                        highlightedEvents.insert(cur);
+                        cur = cur->next;
+                    }
+                    cur = t->pre;
+                    while (cur != nullptr && cur->type() == EventType::Timeline) {
+                        highlightedEvents.insert(cur);
+                        cur = cur->pre;
+                    }
+                }
+            }
+        }
+
+        std::vector<std::vector<const BaseEvent*>> rowEventsToDraw;
         rowEventsToDraw.reserve(visibleRows.size());
         for (const auto& item : visibleRows) {
             rowEventsToDraw.push_back(owner_->collectEventsInView(item.node));
@@ -294,7 +316,7 @@ public:
                 continue;
             }
 
-            for (const TimelineEvent* event : rowEventsToDraw[rowIdx]) {
+            for (const BaseEvent* event : rowEventsToDraw[rowIdx]) {
                 const uint64_t clippedStart = std::max(event->start, owner_->visibleStart_);
                 const uint64_t clippedEnd = std::min(event->end, owner_->visibleEnd_);
                 const double left = xMap.transform(static_cast<double>(clippedStart));
@@ -326,6 +348,8 @@ public:
 
                 const bool isSelected = owner_->hasSelectedEvent_ && owner_->selectedRowIndex_.isValid() &&
                                         owner_->selectedRowIndex_ == item.index && owner_->selectedEvent_ == event;
+                const bool isChainHighlighted =
+                    !highlightedEvents.empty() && (highlightedEvents.find(event) != highlightedEvents.end());
 
                 if (isSelected) {
                     selectedFillRects.push_back(rect);
@@ -334,6 +358,9 @@ public:
                     selectedBoundaryLines.push_back(QLineF(QPointF(rect.left(), yTop), QPointF(rect.left(), yBottom)));
                     selectedBoundaryLines.push_back(
                         QLineF(QPointF(rect.right(), yTop), QPointF(rect.right(), yBottom)));
+                } else if (isChainHighlighted) {
+                    // Highlight chain events with fill only (no boundary lines)
+                    selectedFillRects.push_back(rect);
                 } else {
                     fillRectsByColor[event->color].push_back(rect);
                 }
@@ -364,7 +391,7 @@ public:
                 continue;
             const int barTop = rowRect.top() + 1;
             const int barBottom = rowRect.bottom();
-            for (const TimelineEvent* event : rowEventsToDraw[rowIdx]) {
+            for (const BaseEvent* event : rowEventsToDraw[rowIdx]) {
                 const uint64_t clippedStart = std::max(event->start, owner_->visibleStart_);
                 const uint64_t clippedEnd = std::min(event->end, owner_->visibleEnd_);
                 const double left = xMap.transform(static_cast<double>(clippedStart));
@@ -403,9 +430,9 @@ private:
     TimelineWidget* owner_ = nullptr;
 };
 
-std::vector<const TimelineEvent*> TimelineWidget::collectEventsInView(TimelineNode* node) const
+std::vector<const BaseEvent*> TimelineWidget::collectEventsInView(TimelineNode* node) const
 {
-    std::vector<const TimelineEvent*> eventsToDraw;
+    std::vector<const BaseEvent*> eventsToDraw;
     if (node == nullptr) {
         return eventsToDraw;
     }
@@ -417,7 +444,7 @@ std::vector<const TimelineEvent*> TimelineWidget::collectEventsInView(TimelineNo
 
     auto firstVisibleIt =
         std::lower_bound(events.begin(), events.end(), visibleStart_,
-                         [](const TimelineEvent* event, uint64_t visibleStart) { return event->start < visibleStart; });
+                         [](const BaseEvent* event, uint64_t visibleStart) { return event->start < visibleStart; });
     size_t startIndex = static_cast<size_t>(std::distance(events.begin(), firstVisibleIt));
     while (startIndex > 0 && events[startIndex - 1]->end >= visibleStart_) {
         --startIndex;
@@ -425,7 +452,7 @@ std::vector<const TimelineEvent*> TimelineWidget::collectEventsInView(TimelineNo
 
     auto endVisibleIt =
         std::upper_bound(events.begin() + static_cast<std::ptrdiff_t>(startIndex), events.end(), visibleEnd_,
-                         [](uint64_t visibleEnd, const TimelineEvent* event) { return visibleEnd < event->start; });
+                         [](uint64_t visibleEnd, const BaseEvent* event) { return visibleEnd < event->start; });
     const size_t endIndex = static_cast<size_t>(std::distance(events.begin(), endVisibleIt));
 
     if (startIndex >= endIndex) {
@@ -739,7 +766,7 @@ void TimelineWidget::flushMouseTracker()
                 const int barTop = rowRect.top() + 1;
                 const int barBottom = rowRect.bottom();
                 if (pendingMousePos_.y() >= barTop && pendingMousePos_.y() <= barBottom) {
-                    if (const TimelineEvent* event = findEventContainingTime(node->events(), mouseTime)) {
+                    if (const BaseEvent* event = findEventContainingTime(node->events(), mouseTime)) {
                         if (event->end < visibleStart_ || event->start > visibleEnd_) {
                             continue;
                         }
@@ -813,7 +840,7 @@ void TimelineWidget::updateSelectionFromPosition(const QPoint& pos)
 
     bool found = false;
     QPersistentModelIndex selectedIndex;
-    const TimelineEvent* selectedEvent = nullptr;
+    const BaseEvent* selectedEvent = nullptr;
     const uint64_t mouseTime =
         static_cast<uint64_t>(std::clamp(plot_->invTransform(QwtPlot::xBottom, pos.x()),
                                          static_cast<double>(visibleStart_), static_cast<double>(visibleEnd_)));
@@ -849,7 +876,7 @@ void TimelineWidget::updateSelectionFromPosition(const QPoint& pos)
                 continue;
             }
 
-            if (const TimelineEvent* event = findEventContainingTime(node->events(), mouseTime)) {
+            if (const BaseEvent* event = findEventContainingTime(node->events(), mouseTime)) {
                 if (event->end < visibleStart_ || event->start > visibleEnd_) {
                     if (tree_->isExpanded(idx)) {
                         visitVisible(idx);

@@ -53,11 +53,11 @@ public:
 
     const std::string &name() const;
 
-    const std::vector<TimelineEvent *> &events() const;
+    const std::vector<BaseEvent *> &events() const;
 
-    void addEvent(TimelineEvent *event);
+    void addEvent(BaseEvent *event);
 
-    void addEvents(const std::vector<TimelineEvent *> &events);
+    void addEvents(const std::vector<BaseEvent *> &events);
 
     void foreachNode(const std::function<void(TimelineNode *)> &func);
 
@@ -80,7 +80,7 @@ public:
 private:
     TimelineNode *parent_ = nullptr;
     std::vector<TimelineNode *> children_;
-    std::vector<TimelineEvent *> events_;
+    std::vector<BaseEvent *> events_;
     std::string name_;
     NodeType type_ = TIMELINE;
     bool expand_ = true;

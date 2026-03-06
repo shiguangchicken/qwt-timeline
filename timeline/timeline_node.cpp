@@ -147,27 +147,22 @@ const std::string& TimelineNode::name() const
     return name_;
 }
 
-const std::vector<TimelineEvent*>& TimelineNode::events() const
+const std::vector<BaseEvent*>& TimelineNode::events() const
 {
     return events_;
 }
 
-void TimelineNode::addEvent(TimelineEvent* event)
+void TimelineNode::addEvent(BaseEvent* event)
 {
     if (event == nullptr) {
         return;
     }
-    if (!events_.empty()) {
-        TimelineEvent* prev = events_.back();
-        prev->next = event;
-        event->pre = prev;
-    }
     events_.push_back(event);
 }
 
-void TimelineNode::addEvents(const std::vector<TimelineEvent*>& events)
+void TimelineNode::addEvents(const std::vector<BaseEvent*>& events)
 {
-    for (TimelineEvent* event : events) {
+    for (BaseEvent* event : events) {
         addEvent(event);
     }
 }
@@ -203,7 +198,7 @@ void TimelineNode::setVisible(bool v)
 void TimelineNode::sortEvents()
 {
     std::sort(events_.begin(), events_.end(),
-              [](const TimelineEvent* lhs, const TimelineEvent* rhs) { return lhs->start < rhs->start; });
+              [](const BaseEvent* lhs, const BaseEvent* rhs) { return lhs->start < rhs->start; });
 }
 
 uint64_t TimelineNode::minTime() const
@@ -211,7 +206,7 @@ uint64_t TimelineNode::minTime() const
     uint64_t minValue = std::numeric_limits<uint64_t>::max();
     bool hasValue = false;
 
-    for (const TimelineEvent* event : events_) {
+    for (const BaseEvent* event : events_) {
         minValue = std::min(minValue, event->start);
         hasValue = true;
     }
@@ -231,7 +226,7 @@ uint64_t TimelineNode::maxTime() const
 {
     uint64_t maxValue = 0;
 
-    for (const TimelineEvent* event : events_) {
+    for (const BaseEvent* event : events_) {
         maxValue = std::max(maxValue, event->end);
     }
 

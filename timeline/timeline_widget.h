@@ -14,7 +14,7 @@ class QMouseEvent;
 class QWheelEvent;
 class QEvent;
 class TimelineNode;
-struct TimelineEvent;
+struct BaseEvent;
 
 class TimelineWidget : public QWidget {
     Q_OBJECT
@@ -44,7 +44,7 @@ private:
     void flushMouseTracker();
     void applyZoomAround(double anchorTime, double zoomFactor);
     void updateSelectionFromPosition(const QPoint& pos);
-    std::vector<const TimelineEvent*> collectEventsInView(TimelineNode* node) const;
+    std::vector<const BaseEvent*> collectEventsInView(TimelineNode* node) const;
 
     class TimelinePlotItem;
 
@@ -65,6 +65,6 @@ private:
     double mouseTrackerTime_ = 0.0;
 
     QPersistentModelIndex selectedRowIndex_;
-    const TimelineEvent* selectedEvent_ = nullptr;
+    const BaseEvent* selectedEvent_ = nullptr;
     bool hasSelectedEvent_ = false;
 };

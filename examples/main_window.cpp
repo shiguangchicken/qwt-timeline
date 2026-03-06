@@ -3,6 +3,7 @@
 #include <QDebug>
 #include <QElapsedTimer>
 #include <QVBoxLayout>
+#include <algorithm>
 #include <array>
 #include <atomic>
 #include <functional>
@@ -34,9 +35,9 @@ void addRandomEvents(TimelineNode* node, std::mt19937& rng)
         timeline_color::DEFAULT,
         timeline_color::GRAY,
         timeline_color::EVENT_EDGE_LINE,
-        0xff86d8b2,
-        0xffb5a3ff,
-        0xff4d76ff,
+        0xffFFD54F,
+        0xffFF9800,
+        0xff9CCC65,
     };
 
     std::uniform_int_distribution<int> countDist(200000, 210000);
@@ -92,6 +93,25 @@ void addCounterEvents(TimelineNode* node, std::mt19937& rng)
         node->addEvent(event);
         cursor = event->end;
         totoal_event_count++;
+    }
+}
+
+void addRelation(TimelineNode* node1, TimelineNode* node2)
+{
+    if (node1 == nullptr || node2 == nullptr) {
+        return;
+    }
+
+    const auto& ev1 = node1->events();
+    const auto& ev2 = node2->events();
+    const size_t n = std::min(ev1.size(), ev2.size());
+    for (size_t i = 0; i < n; ++i) {
+        auto* t1 = dynamic_cast<TimelineEvent*>(ev1[i]);
+        auto* t2 = dynamic_cast<TimelineEvent*>(ev2[i]);
+        if (t1 && t2) {
+            t1->setRelationNext(t2);
+            t2->setRelationPre(t1);
+        }
     }
 }
 
@@ -159,6 +179,11 @@ std::unique_ptr<TimelineNode> createDemoTree(uint32_t seedShift)
         future.get();
     }
 
+    // Link adjacent GPU stream events: event[i]->next -> corresponding event[i] of next stream
+    for (int i = 0; i + 1 < gpu->childCount(); ++i) {
+        addRelation(gpu->childAt(i), gpu->childAt(i + 1));
+    }
+
     return root;
 }
 
@@ -192,12 +217,12 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent), ui(new Ui::MainWi
 MainWindow::~MainWindow()
 {
     root1_->foreachNode([](TimelineNode* node) {
-        for (TimelineEvent* event : node->events()) {
+        for (BaseEvent* event : node->events()) {
             delete event;
         }
     });
     root2_->foreachNode([](TimelineNode* node) {
-        for (TimelineEvent* event : node->events()) {
+        for (BaseEvent* event : node->events()) {
             delete event;
         }
     });
